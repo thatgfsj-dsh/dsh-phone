@@ -14,7 +14,7 @@ import type {
   StreamSession,
   StreamSessionOptions,
 } from '../../src/phone/service.ts'
-import { PhoneService } from '../../src/phone/service.ts'
+import { BOOT_DEADLINE_MS, PhoneService } from '../../src/phone/service.ts'
 import type { RuntimeStatus } from '../../src/runtime/types.ts'
 
 function makeConfig(overrides: Partial<ServiceConfig> = {}): ServiceConfig {
@@ -804,4 +804,42 @@ test('viewer 存活时 idle 暂停被否决：保持 running/不关流（issue #
   assert.equal(harness.sessions[0]!.closeCalls, 1)
   await harness.lifecycle.hooks.pause!()
   assert.equal(harness.adapter.pauseCalls, 1)
+})
+
+test('issue #72：控制会话 single-flight——并发 inputText 只创建一个 control 会话', async () => {
+  let created = 0
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const harness = makeService({
+    startStream: async (): Promise<StreamSession> => {
+      created += 1
+      await gate
+      return {
+        async injectText() {},
+        async injectTouch() {},
+        async injectKey() {},
+        async close() {},
+      }
+    },
+  })
+  await harness.service.ensureRunning()
+
+  const first = harness.service.inputText('你好')
+  const second = harness.service.inputText('世界')
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  assert.equal(created, 1, '并发调用必须共享同一个 control 会话创建')
+
+  release()
+  await Promise.all([first, second])
+  assert.equal(created, 1)
+
+  // 会话建立后复用同一实例，不再创建
+  await harness.service.inputText('again')
+  assert.equal(created, 1)
+})
+
+test('issue #72：lifecycle boot 预算 >= adapter 等待 + connect 重试（240s）', () => {
+  assert.equal(BOOT_DEADLINE_MS, 240_000)
 })

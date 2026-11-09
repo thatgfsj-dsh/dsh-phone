@@ -116,6 +116,10 @@ export function failureFrom(error: unknown): ToolFailure {
   if (code === 'timeout') {
     return { ok: false, code: 'E_TIMEOUT', message, retryable: true }
   }
+  // issue #72：ADB 连接被关闭/连不上 → 设备断连（可重试），不要兜底成 E_DEVICE_COMMAND
+  if (code === 'closed' || code === 'connect') {
+    return { ok: false, code: 'E_DEVICE_DISCONNECTED', message, retryable: true }
+  }
   // issue #44：冷启动窗口内设备尚未就绪 → 复用 E_BOOTING 可重试语义
   if (code === 'device-not-ready') {
     return bootingFailure(0)

@@ -166,3 +166,70 @@ describe('AdbDevice：输入与控件树', () => {
     assert.equal(await device.shell('getprop ro.product.model'), 'ro.product.model=Pixel\n')
   })
 })
+
+describe('AdbDevice：issue #72（phone_key 注入 / 截图错误掩码）', () => {
+  test('按键名带 shell 元字符在发命令前被拒绝（不产生任何 shell 调用）', async () => {
+    const connection = new FakeAdbConnection()
+    connection.on(/^input keyevent /, '')
+    const device = new AdbDevice(connection)
+
+    for (const name of [
+      'KEYCODE_HOME; reboot',
+      'HOME;reboot',
+      'HOME && rm -rf /',
+      'HOME|shutdown',
+      'KEYCODE_HOME`id`',
+      '',
+    ]) {
+      await assert.rejects(device.key(name), (error: unknown) => {
+        assert.ok(error instanceof AdbError)
+        assert.equal(error.code, 'protocol')
+        return true
+      })
+    }
+    assert.equal(connection.commands.length, 0, '非法按键名不得拼进 shell')
+
+    // 合法形式照旧：映射名 / 全名 / 数字 keycode
+    await device.key('HOME')
+    await device.key('keycode_home')
+    await device.key('66')
+    assert.deepEqual(connection.commands, [
+      'input keyevent KEYCODE_HOME',
+      'input keyevent KEYCODE_HOME',
+      'input keyevent 66',
+    ])
+  })
+
+  test('真断连（closed/connect）重试后原样抛出，不伪装成 E_DEVICE_NOT_READY', async () => {
+    for (const code of ['closed', 'connect'] as const) {
+      const connection = new FakeAdbConnection()
+      connection
+        .on(/^screencap -p /, () => new AdbError('连接已关闭', code))
+        .on(/^rm -f /, '')
+      const device = new AdbDevice(connection)
+      await assert.rejects(
+        device.screenshot({ sleep: async () => undefined }),
+        (error: unknown) => {
+          assert.ok(error instanceof AdbError)
+          assert.equal(error.code, code)
+          assert.doesNotMatch(error.message, /E_DEVICE_NOT_READY/)
+          return true
+        },
+      )
+    }
+  })
+
+  test('冷启动类错误（空输出）仍按 E_DEVICE_NOT_READY 可重试语义返回', async () => {
+    const connection = new FakeAdbConnection()
+    connection.on(/^screencap -p /, '').on(/^base64 /, '').on(/^rm -f /, '')
+    const device = new AdbDevice(connection)
+    await assert.rejects(
+      device.screenshot({ sleep: async () => undefined }),
+      (error: unknown) => {
+        assert.ok(error instanceof AdbError)
+        assert.equal(error.code, 'device-not-ready')
+        return true
+      },
+    )
+  })
+})

@@ -225,7 +225,7 @@ tab body 挂载时先 `GET /dsh-phone/api/config`，由 `describePanelGate()` �
 
 - 收到 WS `state{booting}` 后开始显示进度；若该帧带 `bootMs`（未来 Host 可加）直接用它，
   否则每 1s 轮询 `GET /dsh-phone/api/status` 取 `PhoneStatus.bootMs`（`bootMs` 是已耗时）。
-- `boot.ts` 的 `describeBootProgress(bootMs)` 生成：已等待秒数、0–120s 进度百分比、阶段文案
+- `boot.ts` 的 `describeBootProgress(bootMs)` 生成：已等待秒数、0–240s 进度百分比、阶段文案（issue #72 与 host boot 预算对齐）
   （<15s 拉起 / 15–45s 等待 adbd / 45–90s 首次冷启动较慢 / ≥90s 慢启动提示）与超时标记；
   进度条与徽章沿用 `--dsw-alias-*` token。
 - 仅当**面板可见且 booting** 时轮询：`ready/running/paused/stopped` 或面板隐藏/关闭/卸载

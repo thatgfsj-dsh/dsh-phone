@@ -266,7 +266,7 @@ interface ProvisionStatus {
 | `E_STREAM_BACKPRESSURE` | close 1011 | true | WS 发送积压超限（keyframe/config 无法安全丢弃） |
 | `E_STREAM_REPLACED` | close 4001（客户端本地事件） | false | 同一实例的新页面替换了本连接；提示已在另一处打开 |
 | `E_STREAM_BUSY` | WS error | true | 已有会话且无法替换（正常不应出现） |
-| `E_DEVICE_DISCONNECTED` | WS error | true | ADB 断开，runtime 仍 running |
+| `E_DEVICE_DISCONNECTED` | 502（`GET /screenshot`）/ WS error | true | ADB 断开，runtime 仍 running（issue #72：截图不再伪装成 200 E_BOOTING） |
 | `E_DEVICE_COMMAND` | 500 | true | shell/input 执行失败，message 含截断 stderr |
 | `E_TIMEOUT` | 504 | true | 操作超时 |
 

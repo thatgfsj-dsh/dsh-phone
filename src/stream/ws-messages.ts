@@ -83,6 +83,10 @@ export function parseClientMessage(text: string): ParseResult {
       if (typeof value.name !== 'string' || value.name.length === 0) {
         return { ok: false, reason: 'name 必须是非空字符串' }
       }
+      // issue #72：按键名与 AdbDevice 同一字符白名单（WS 通道也禁止 shell 元字符）
+      if (value.name.length > 64 || !/^[A-Za-z0-9_]+$/.test(value.name)) {
+        return { ok: false, reason: 'name 只允许字母/数字/下划线（最长 64 字符）' }
+      }
       return { ok: true, message: { kind: 'key', name: value.name } }
     }
     case 'text': {

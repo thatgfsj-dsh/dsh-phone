@@ -215,15 +215,23 @@ runtime 层本身**无状态**：`detectRuntime` / `resolveRuntime` 每次调用
 现在分三层处理：
 
 1. **连接/握手重试**（`src/phone/boot-retry.ts` + `PhoneService.#connectDuringBoot`）：
-   boot 窗口内按 **500ms → 1s → 2s → 4s → 8s（封顶）** 退避重试 ADB connect，预算
-   `bootTimeoutMs - 20s`（默认 120s − 20s），给每次握手自身（最长 8s）留余量；
+   boot 窗口内按 **500ms → 1s → 2s → 4s → 8s（封顶）** 退避重试 ADB connect，connect 预算
+   固定 **100s**（120s − 20s），给每次握手自身（最长 8s）留余量；
+   lifecycle 的 boot 上限为 **240s**（issue #72：adapter 自身 adbd 等待 120s + connect 100s + 20s 余量；
+   旧值 120s 会与两层预算矛盾，慢冷启动被误判超时）。
    耗尽后才抛错，错误文案带「已尝试 N 次 / 约 Xs / 最后一次原因」并标 `retryable`。
    - 只重试暂时性错误（`AdbError` 全部 / `retryable:true` / timeout/connect/closed/device-not-ready）；
      普通配置错误立即失败（不把真错误拖 120s）。
+   - `boot 超时/失败 → 状态机先 await hooks.cancelBoot()`（issue #72）：服务层等 `adapter.cancelStart()`
+     清理半启动实例落地（上限 15s）、断开 ADB、丢弃 handle，之后状态机才抛错；下一次重试不会与旧实例
+     清理并发 spawn。
    - <BTruntime 不恢复 / adapter 启动失败` 不在此重试范围（那是决策树/安装问题，仍走 `E_RUNTIME_UNAVAILABLE`）。
 2. **截图重试**（`AdbDevice.screenshot`）：默认 3 次尝试，失败后按 500ms、1000ms 退避重试；
    空输出 / 非法 base64 / 非 PNG 一律归类为 `E_DEVICE_NOT_READY`（`AdbError.code='device-not-ready'`，
    `retryable=true`），不再报「base64 非法」。耗尽后错误文案为「设备尚未就绪：连续 3 次截图失败…」。
+   - **真断连不掩码（issue #72）**：`closed`/`connect` 重试后仍失败时原样上抛，不再包装成
+     `device-not-ready`；HTTP `GET /screenshot` 映射 **502 `E_DEVICE_DISCONNECTED`（retryable）**，
+     工具层同样返回 `E_DEVICE_DISCONNECTED`。
    - HTTP `GET /screenshot` 对 `device-not-ready` 返回 **200 + E_BOOTING（retryable）**；
      工具层 `failureFrom` 同样映射为 `E_BOOTING`（与 booting 中间态一致，Agent 等待后重试）。
 3. **lastError 清理**：`PhoneLifecycle` 在 boot 成功进入 running 时显式清空 `lastError`；
@@ -265,7 +273,7 @@ sdkmanager / avdmanager / docker run / attach 端口探测 / scrcpy 下载命令
 | Windows WHPX 检测 | 未在 Windows 验证 | `emulator -accel-check` 输出匹配是启发式 |
 | 真实 Android 设备的 `screencap`/`uiautomator` | 未实测 | 命令与临时文件清理逻辑按 toybox 行为编写，假连接覆盖了流程 |
 | 安装指引中的 sdkmanager/avdmanager/emulator/docker run 命令文本 | 未在本机逐条执行 | 按官方用法与适配器参数生成；本机无 emulator/Docker。命令快照测试只保证文案不漂移，不代表已跑通 |
-| 冷启动重试的真实时序 | 未在真 emulator 复测（本机无 AVD） | 退避序列/重试次数/截图重试用假实现覆盖；真实 boot_completed 时间因机器而异，120s 窗口可配置 |
+| 冷启动重试的真实时序 | 未在真 emulator 复测（本机无 AVD） | 退避序列/重试次数/截图重试用假实现覆盖；真实 boot_completed 时间因机器而异，240s 预算可配置（issue #72） |
 
 ## 7. 设计取舍 / 与文档的偏差
 

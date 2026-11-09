@@ -83,7 +83,7 @@ Host 不直接读写 `cordis.patch.yml`，不自行实现 runtime/收流；runti
 | `phone_screenshot` | — | `attachments.saveImage` → `[{type:'text'},{type:'image'}]`；附件缺失/失败/超限降级文本，不整体失败 |
 | `phone_tap` | `x,y` (integer, required) | 坐标必须来自截图/控件树；描述写明前置条件 |
 | `phone_swipe` | `x1,y1,x2,y2,durationMs` | 同上 |
-| `phone_key` | `name` (string) | HOME/BACK/RECENTS/ENTER/DEL… → keyevent |
+| `phone_key` | `name` (string) | HOME/BACK/RECENTS/ENTER/DEL… → keyevent；名字只允许字母/数字/下划线（issue #72 注入防护） |
 | `phone_input_text` | `text` (string) | 走 `PhoneService.inputText` → scrcpy INJECT_TEXT；**禁止 shell input text**（中文） |
 | `phone_app_launch` | `pkg` (string) | monkey LAUNCHER intent |
 | `phone_uiautomator_dump` | — | 控件树 XML；与截图双通道校验 |
@@ -140,15 +140,21 @@ activity/window/display/battery/cpuinfo/meminfo/gfxinfo/input/power/wifi。
 - **控制通道**：`inputText/touch` 优先复用活动视频会话的 controller；无 viewer 时经
   `startControlOnly`（只建 control socket，不编码视频）——满足 SPEC §3.6「无人看不开流」。
 - **断连**：`AdbConnection.disconnected` → 关闭会话 + `lifecycle.notifyDisconnected` → state=stopped，
-  下次交互自动重连。
+  下次交互自动重连。**booting 期间断连不会在 boot 成功后回到 running**（issue #72：记录断连原因，
+  boot 完成时改为 stopped + 可重试错误，避免「状态 running 但无连接」）。
 - **就绪判定（issue #67）**：ADB 连上后还会等 `sys.boot_completed=1` +
   `init.svc.bootanim=stopped` + `pm path android`（`waitBootCompleted`，wiring 开启，超时 90s）；
-  boot 超时/失败会调用 `adapter.cancelStart()` 清理半启动实例（避免孤儿 emulator）。
+  boot 超时/失败会先**等待** `adapter.cancelStart()` 清理半启动实例落地（issue #72，上限 15s），
+  再抛错并丢弃 handle——避免重试在旧实例清理完成前再 spawn 一台（孤儿 emulator）。
 - **观看也算交互（issue #67）**：视频流有观众时每 30s 节流 `lifecycle.touch()`，观看中不会 idle→pause。
 - **冷启动重试（issue #44）**：`#start/#resume` 建立 ADB 连接时，若握手/连接失败按
-  500ms→1s→2s→4s→8s 退避重试，预算 `bootTimeoutMs − 20s`（默认 100s）；耗尽才抛错并保留最后一次原因。
+  500ms→1s→2s→4s→8s 退避重试，connect 预算固定 100s（120s − 20s）；耗尽才抛错并保留最后一次原因。
+  lifecycle 的 boot 上限为 **240s**（issue #72：覆盖 adapter adbd 等待 120s + connect 100s + 余量，
+  旧值 120s 会在慢冷启动时被误判超时）。
   截图失败（空输出/非法 base64/非 PNG）在设备内重试 3 次，仍失败则 `E_DEVICE_NOT_READY`
-  （`AdbError.code='device-not-ready'`，可重试）→ HTTP/工具层映射为 `E_BOOTING`。
+  （`AdbError.code='device-not-ready'`，可重试）→ HTTP/工具层映射为 `E_BOOTING`；
+  **真断连（`closed`/`connect`）重试后原样上抛**（issue #72），HTTP `GET /screenshot` 返回
+  502 `E_DEVICE_DISCONNECTED`、工具层返回 `E_DEVICE_DISCONNECTED`，不再伪装成「设备启动中」。
 - **lastError 清理**：成功进入 running 后 state.ts 清空 `lastError`，`service.status()` 在 running 时
   不再回退展示历史启动/探测错误；只有当前状态相关错误（如 pause 失败、断连）才显示。
 - **状态事件**：`onStateChange(fn)` 由生命周期 onChange 映射成 `PhoneStatus`。

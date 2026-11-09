@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { describeBootProgress } from '../../src/client/boot.ts'
+import { BOOT_TIMEOUT_MS, describeBootProgress } from '../../src/client/boot.ts'
 import {
   PANEL_COMPACT_MAX,
   PANEL_WIDE_MIN,
@@ -52,16 +52,16 @@ test('summarizeBoot builds the elapsed/estimate line from poller progress', () =
   const early = summarizeBoot(describeBootProgress(12_000))
   assert.equal(early.seconds, 12)
   assert.equal(early.estimateSeconds, 100)
-  assert.equal(early.percent, 10)
+  assert.equal(early.percent, 5)
   assert.equal(early.phaseKey, 'panel.boot.phase.starting')
   assert.equal(early.timedOut, false)
 
   const almost = summarizeBoot(describeBootProgress(100_000))
   assert.equal(almost.seconds, 100)
-  assert.equal(almost.percent, 83)
+  assert.equal(almost.percent, 42)
   assert.equal(almost.phaseKey, 'panel.boot.phase.slow')
 
-  const capped = summarizeBoot(describeBootProgress(120_000))
+  const capped = summarizeBoot(describeBootProgress(BOOT_TIMEOUT_MS))
   assert.equal(capped.percent, 100)
   assert.equal(capped.timedOut, true)
   assert.equal(summarizeBoot(describeBootProgress(5_000), 10_000).estimateSeconds, 10)

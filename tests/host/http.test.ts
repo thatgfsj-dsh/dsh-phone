@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
+import { AdbError } from '../../src/adb/types.ts'
 import { safeGetOrigin } from '../../src/http/origin.ts'
 import {
   createReadOnlyHandler,
@@ -753,4 +754,20 @@ test('GET /status：兼容并补充 owned/adopted/pid（issue #83）', async () 
   assert.equal(value.adopted, false)
   assert.equal(value.pid, 999)
   assert.equal(value.since, 456)
+})
+
+
+test('GET /screenshot：真断连（closed/connect）→ 502 E_DEVICE_DISCONNECTED（issue #72）', async () => {
+  for (const code of ['closed', 'connect'] as const) {
+    const service = makeService({
+      screenshot: async () => {
+        throw new AdbError('连接已关闭', code)
+      },
+    })
+    const harness = makeHarness({ service })
+    const response = await invoke(harness, { method: 'GET', url: '/dsh-phone/api/screenshot' })
+    assert.equal(response.statusCode, 502)
+    assert.equal(json(response).error.code, 'E_DEVICE_DISCONNECTED')
+    assert.equal(json(response).error.retryable, true)
+  }
 })

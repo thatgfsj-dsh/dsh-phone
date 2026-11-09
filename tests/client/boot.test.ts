@@ -24,11 +24,11 @@ test('describeBootProgress clamps and maps phases across the boot window', () =>
   const full = describeBootProgress(BOOT_TIMEOUT_MS)
   assert.equal(full.timedOut, true)
   assert.equal(full.percent, 100)
-  assert.equal(full.seconds, 120)
+  assert.equal(full.seconds, 240)
 
   const over = describeBootProgress(BOOT_TIMEOUT_MS * 2)
   assert.equal(over.percent, 100, 'progress is capped at 100')
-  assert.equal(over.seconds, 240, 'elapsed seconds keep counting')
+  assert.equal(over.seconds, 480, 'elapsed seconds keep counting')
 })
 
 test('describeBootProgress honours a custom ceiling', () => {
@@ -115,7 +115,7 @@ test('BootStatusPoller keeps polling through transient status read failures', as
   assert.deepEqual(fake.progresses[0], { seconds: 0, percent: 0 })
   assert.equal(fake.poller.running, true)
   await fake.runNextTimer()
-  assert.deepEqual(fake.progresses[1], { seconds: 2, percent: 2 })
+  assert.deepEqual(fake.progresses[1], { seconds: 2, percent: 1 })
 })
 
 test('BootStatusPoller.stop cancels the pending tick and further callbacks', async () => {

@@ -245,3 +245,74 @@ describe('PhoneLifecycle：断连与订阅', () => {
     assert.equal(lifecycle.state, 'running')
   })
 })
+
+describe('PhoneLifecycle：issue #72（booting 断连 / 超时取消）', () => {
+  test('booting 期间断连：boot 成功后不得进入 running，返回可重试错误', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const { lifecycle, calls, states } = setup({
+      async start() {
+        calls.start += 1
+        await gate
+      },
+    })
+    const pending = lifecycle.ensureRunning()
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    assert.equal(lifecycle.state, 'booting')
+
+    lifecycle.notifyDisconnected('ADB 连接已断开')
+    assert.equal(lifecycle.state, 'stopped')
+
+    release()
+    await assert.rejects(pending, (error: unknown) => {
+      assert.match((error as Error).message, /已断开/)
+      assert.equal((error as { retryable?: boolean }).retryable, true)
+      return true
+    })
+    assert.equal(lifecycle.state, 'stopped')
+    assert.ok(!states.includes('running'), '不得出现 running（无连接的假 running）')
+    assert.match(lifecycle.status.lastError ?? '', /已断开/)
+  })
+
+  test('boot 超时：先等待 cancelBoot 落地，之后才抛超时错误', async () => {
+    const order: string[] = []
+    let releaseCancel!: () => void
+    const cancelGate = new Promise<void>((resolve) => {
+      releaseCancel = resolve
+    })
+    const { lifecycle, clockAdvance } = setup(
+      {
+        start: () => {
+          order.push('start')
+          return new Promise<void>(() => undefined)
+        },
+        async cancelBoot() {
+          order.push('cancel:begin')
+          await cancelGate
+          order.push('cancel:end')
+        },
+      },
+      { ...DEFAULT_LIFECYCLE_TIMINGS, bootTimeoutMs: 1_000 },
+    )
+    const pending = lifecycle.ensureRunning()
+    const assertion = assert.rejects(pending, /启动超时/)
+    await clockAdvance(1_000)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    // 超时后状态机仍在等 cancelBoot 落地，尚未 reject
+    assert.deepEqual(order, ['start', 'cancel:begin'])
+
+    releaseCancel()
+    await assertion
+    assert.deepEqual(order, ['start', 'cancel:begin', 'cancel:end'])
+    assert.equal(lifecycle.state, 'stopped')
+  })
+
+  test('默认 boot 预算覆盖 adapter 等待 120s + connect 重试 100s', () => {
+    assert.ok(
+      DEFAULT_LIFECYCLE_TIMINGS.bootTimeoutMs >= 240_000,
+      '默认 bootTimeoutMs 必须 >= 240s（issue #72 预算对齐）',
+    )
+  })
+})
