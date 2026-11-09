@@ -15,7 +15,7 @@
 > 收口修复 #90），单测覆盖 2s 看门狗、owned/adopted 所有权语义、restart 序列、并发动作与 dispose 5s 预算
 > （§9.2）；#87 肥鱼手机定制已在真实 emulator 实机验证 **1080x2400 / zh-CN / 空白首页 / 壁纸 111-222 轮换 /
 > YouTube 已卸载**（§9.1）；#92 客户端生命周期验收 11 例单测（[client.md](client.md) §4.5）。
-> 本机 `node --test`：**472 例 / 466 pass / 6 skipped / 0 fail**；`npm run check` 通过（单文件 893 行 < 1000）。
+> 本机 `node --test`（2026-11-10，rebase 到 5eaa2f2 后复跑）：**496 例 / 490 pass / 6 skipped / 0 fail**；`npm run check` 通过（当前最大单文件 937 行 < 1000）。
 >
 > **v0.3.0（2026-10-26）发布状态**：#67 emulator 启动专项实测**温启动 ~15s / 暂停恢复 ~19s**
 > （冷启动 33–95s 有客观下限，`aosp_atd` 未实测；完整数据与方法见 §8）；#73 视频流 viewer 心跳/
@@ -23,6 +23,15 @@
 > 真实 emulator attach 全链路 **PASS**（§2 行 10–12 与 §7）；剩余 SKIP/人工待办：emulator 自启（B 分支，
 > 需停用用户 live 实例）、真实浏览器渲染/WebCodecs/TinyH264、redroid（本机无 Docker）。#56 的 cpu/mem 采样与
 > booting `phase` 仍为单测/假环境验证。
+>
+> **#40 真实环境验收复核（2026-11-10）**：真实 emulator **A 分支（attach 复用已运行实例）**与
+> **B 分支（插件自启 owned 实例）**全链路均 **PASS**——截图 1080x2400、Host WS ready + DPH1、
+> key/touch/中文 INJECT_TEXT 控制无 error、断开 6.5s 后仍 running、二次连接重建；B 分支另验证
+> owned/adopted/pid 与 `POST /runtime stop` 后**进程退出 + 端口关闭 + 无残留进程**。证据见 §7.3–§7.6；
+> rebase 到 origin/main 5eaa2f2（#72/#112/#113 已合入）后已复跑 A/B 真实链路与自检（§7.7）。
+> 仍未覆盖：真实浏览器渲染/WebCodecs/TinyH264、审批 UI 点击、redroid（本机无 Docker）、Windows/macOS。
+> 期间发现「断开后 <2.5s 立即重连」与 scrcpy-server 退出清理删 jar 的瞬态竞态（§7.5），
+> harness 已加冷却 + 重试并如实记录。
 
 ## 1. 一条命令跑什么
 
@@ -31,7 +40,7 @@ npm run verify
 ├── scripts/verify/verify-tools.mjs      假 ctx 加载 apply：9 个 phone_* 工具 / 参数 / phone_shell ask
 ├── scripts/verify/verify-stream.mjs     createStreamUpgradeRoute + 假 socket：握手 / DPH1 / 5s 宽限 / 断开清理
 ├── scripts/verify/verify-install.mjs    临时 profile 安装冒烟（dump-config / dump-config-schema / --help / 隔离 web apply）
-├── scripts/verify/verify-emulator.mjs   真实 emulator attach 链路（DSH_PHONE_E2E=1 才跑；默认 SKIP）
+├── scripts/verify/verify-emulator.mjs   真实 emulator attach/自启链路（DSH_PHONE_E2E=1 + DSH_PHONE_E2E_MODE 才跑；默认 SKIP）
 ├── scripts/check-file-lines.mjs         单文件 ≤1000 行硬线
 └── node --test tests/e2e/*.test.mjs     无真机/容器/浏览器场景显式 SKIP（带原因）
 \`\`\`
@@ -44,28 +53,34 @@ npm run verify
 - 阶段 B 使用 \`mkdtemp\` 隔离的临时 \`DSH_HOME\` 启动 web（\`--no-open --port 0\`），不会占用/复用用户 3080 实例；结束删除临时 home 与进程；
 - 所有清理经 LIFO \`Cleanup\` 登记，失败只告警不掩盖主失败。
 
-## 2. 本机验收结果（2026-10-25，feat/8-verify）
+## 2. 本机验收结果（2026-10-25 基线；2026-11-10 #40 复核更新第 10–17 行）
 
-环境：Debian 13 / Node v24.21.0 / npm 11.19.0 / pnpm 12.11.2 / dsh 0.2.1-rc.2（全局安装）。
+环境（2026-10-25 基线）：Debian 13 / Node v24.21.0 / npm 11.19.0 / pnpm 12.11.2 / dsh 0.2.1-rc.2。
+环境（2026-11-10 #40 复核）：Debian 13 / Node v24.21.0 / dsh 0.2.2-rc.1（本机当前）/ Android emulator 37.2.12。
+环境（2026-11-10 rebase 后复跑）：origin/main 5eaa2f2（#72/#112/#113 已合入，devDeps 升级 DSH 0.2.2-rc.1），真实链路与自检均在最终代码上重跑（§7.7）。
 
 | # | 验收项 | 命令 | 本机结果 | 环境约束 | 未覆盖 / 备注 |
 |---|---|---|---|---|---|
 | 1 | 类型检查 | \`npm run typecheck\` | PASS | 无 | — |
-| 2 | 单元测试（runtime/adb/host/tools/stream/client） | \`npm test\` | PASS | 无 | 不依赖真机；本次 verify 不重复跑，入口见 \`npm run check\` |
-| 3 | 单文件 ≤1000 行 | \`node scripts/check-file-lines.mjs\` | PASS（102 个文件） | 无 | 目标 ≤300 行/文件由 review 把关 |
-| 4 | 构建 | \`npm run build\` | PASS（host=48 file(s), client=bundled） | 需要 \`node_modules\` | \`lib/\` 不提交 |
+| 2 | 单元测试（runtime/adb/host/tools/stream/client） | \`npm test\` | PASS（2026-11-10 rebase 后：**496 例 / 490 pass / 6 skip / 0 fail**） | 无 | 不依赖真机；\`npm run check\` 同跑 |
+| 3 | 单文件 ≤1000 行 | \`node scripts/check-file-lines.mjs\` | PASS（182 个文件） | 无 | 目标 ≤300 行/文件由 review 把关 |
+| 4 | 构建 | \`npm run build\` | PASS（host=65 file(s), client=bundled） | 需要 \`node_modules\` | \`lib/\` 不提交 |
 | 5 | 工具注册（apply） | \`node scripts/verify/verify-tools.mjs\` | PASS | 无 | 9 个工具名/顺序/参数/描述、phone_shell ask/白名单、enabled=false |
 | 6 | WS 协议 | \`node scripts/verify/verify-stream.mjs\` | PASS | 假 socket | 101 握手、DPH1、visibility 5s 宽限、断开清理、鉴权 403 |
 | 7 | 安装冒烟（profile + dump） | \`node scripts/verify/verify-install.mjs\` | PASS | 本机 dsh + pnpm | 见 §3 证据 |
 | 8 | 安装冒烟（web apply） | 同上（阶段 B） | PASS | 临时隔离 \`DSH_HOME\` | 起 web 进程，验证 401/200 与 config 生效 |
 | 9 | redroid 真实运行时 | e2e | SKIP | 需 Docker + binder | 本机无 Docker |
-| 10 | emulator 真实运行时（attach 复用现有实例） | DSH_PHONE_E2E=1 node scripts/verify/verify-emulator.mjs | **PASS**（截图 + Host WS ready/DPH1 + 控制 + 释放） | 需 127.0.0.1:5555 有 adbd；本机实例由用户 live 会话拉起 | 见 §7；#59/#60 修复后重跑通过 |
-| 11 | scrcpy 实连（stream 层直连对照） | 同上（脚本内直连 src/stream） | PASS（704ms push/start；51 帧/5s，keyframe 1，control OK） | 真实 emulator | Host WS 路径同样 PASS（102 帧/10s）；见 §7 |
-| 12 | emulator 自启（B 分支） | — | SKIP | 需停用用户 live 实例 | 按 Lead 决策不 SIGTERM 用户实例；由 #40 人工清单覆盖 |
-| 13 | 真实 attach（TCP adbd） | 同上 | PASS（ADB 直连 + getprop + wm size） | 127.0.0.1:5555 | 本机为 emulator adbd，非独立真机 |
+| 10 | emulator attach（复用已运行实例，A 分支） | \`DSH_PHONE_E2E=1 node scripts/verify/verify-emulator.mjs\` | **PASS**（2026-11-10 复核：截图 + Host WS ready/DPH1 + 控制 + 释放） | 需 127.0.0.1:5555 有 adbd | 见 §7.3；两次独立运行均通过 |
+| 11 | scrcpy 实连（stream 层直连对照） | 同上（脚本内直连 \`src/stream\`） | PASS（2026-11-10：push/start 227–648ms；12–18 帧/5s，keyframe 1，control ≤3ms） | 真实 emulator | Host WS 路径同样 PASS（19–53 帧/10s）；见 §7 |
+| 12 | emulator 自启（B 分支，插件 owned 实例） | \`DSH_PHONE_E2E=1 DSH_PHONE_E2E_MODE=emulator node scripts/verify/verify-emulator.mjs\` | **PASS**（2026-11-10 首测：懒启动 + 截图/WS/控制/释放 + \`POST /runtime stop\` 后进程退出、端口关闭、无残留） | 需 5555 空闲（否则明确 SKIP，不 adopt 冒充自启） | 见 §7.4；从此前 SKIP 转为 PASS |
+| 13 | 真实 attach（TCP adbd） | \`DSH_PHONE_E2E_ENDPOINT=127.0.0.1:5555 node --test tests/e2e/real-device.test.mjs\` | PASS（2026-11-10：ADB 直连 + getprop + screencap PNG，1.3s） | 127.0.0.1:5555 | 本机为 emulator adbd，非独立真机 |
 | 14 | 真实浏览器页面 | 人工 | 人工待办 | 需浏览器/自动化 | 见 §5，不冒充通过 |
+| 15 | env-gated e2e（node --test attach） | \`DSH_PHONE_E2E=1 node --test tests/e2e/real-emulator.test.mjs\` | PASS（2026-11-10：36.5s） | 需已运行实例 | 断言截图/runtime 所有权/Host WS/释放 |
+| 16 | env-gated e2e（node --test B 分支） | \`DSH_PHONE_E2E=1 DSH_PHONE_E2E_MODE=emulator node --test tests/e2e/real-emulator.test.mjs\` | PASS（2026-11-10：46.4s） | 需 5555 空闲 | 断言 owned/adopted/stop 后 stopped + 端口关闭 |
+| 17 | 断开后极短间隔重连 | — | 观察项（非 PASS 项） | — | 曾稳定复现 \`E_STREAM_START_FAILED\`；harness 冷却 + 重试，见 §7.5 |
+| 18 | rebase 后真实链路复核（v0.4.2 基线 5eaa2f2，A + B） | 同第 10 / 12 行 | **PASS**（2026-11-10：A 36.1s / B 46.3s） | 含 #72/#112/#113 | 见 §7.7；SKIP 项不变 |
 
-\`npm run verify\` 汇总输出（实跑）：
+\`npm run verify\` 汇总输出（2026-11-10 实跑）：
 
 \`\`\`
   PASS 工具注册与 phone_shell 审批（verify-tools）
@@ -76,16 +91,19 @@ npm run verify
 验收通过：5/5 项（skip 项见上方 e2e 输出与 docs/verification.md）
 \`\`\`
 
-e2e 输出 5 个用例全部 SKIP，skip 原因逐条打印（原文）：
+e2e 输出 6 个用例全部 SKIP（未设 \`DSH_PHONE_E2E\` / \`DSH_PHONE_E2E_ENDPOINT\`，且本机按 CONTRIBUTING §4
+已删除临时下载的 scrcpy-server jar），skip 原因逐条打印（原文，节选）：
 
 \`\`\`
 ﹣ 真实运行时：redroid（Docker + binder） # 本机无 Docker（docker version 失败）…
-﹣ 真实运行时：Android emulator（AVD headless） # 本机无 Android SDK emulator 包 / AVD…
-﹣ 真实链路：scrcpy pushServer + 视频/控制 socket # 本机无 scrcpy-server jar，且无真机/可用 attach 端点
+﹣ 真实运行时：Android emulator（AVD headless） # 本机已有 emulator + AVD（dsh-phone-avd）；真实链路默认不跑…
+﹣ 真实链路：scrcpy pushServer + 视频/控制 socket # 本机无 scrcpy-server jar（node scripts/fetch-scrcpy-server.mjs 可下载）…
 ﹣ 真实浏览器：右栏面板 / WebCodecs(Annex-B) / TinyH264 回退 / 设置页 # 本机无浏览器自动化依赖…
 ﹣ 真实 attach：TCP adbd 连接 + getprop + screencap # 未设置 DSH_PHONE_E2E_ENDPOINT…
-ℹ tests 5 / pass 0 / fail 0 / skipped 5
+﹣ 真实 emulator 全链路：截图 PNG / WS DPH1 / 控制 / 释放 # 未设置 DSH_PHONE_E2E=1…
+ℹ tests 6 / pass 0 / fail 0 / skipped 6
 \`\`\`
+
 
 ## 3. 安装冒烟关键证据（verify-install 实跑）
 
@@ -133,16 +151,18 @@ stderr 仅有宿主无关警告（本机 \`all_proxy\` 是 SOCKS 的提示），
 
 ## 4. 未覆盖项（不得视为通过）
 
-1. **真实运行时**：redroid 未验证（无 Docker）；emulator 自启（B 分支）未验证（需停用用户 live 实例）；本机 attach 复用已有 emulator 已实测（§7）。
-2. **Host WS 视频流**：真实设备上已实测 PASS（#59/#60 修复后：ready + DPH1，102 帧/10s、控制无 error）；修复前的 FAILED 记录见 §7.1。
+1. **真实运行时**：redroid 未验证（本机无 Docker）；emulator 自启（B 分支）已于 2026-11-10 由插件 owned 启动/停止实测 **PASS**（§7.4）；attach 复用已运行实例 **PASS**（§7.3）。
+2. **Host WS 视频流**：真实设备/emulator 上已实测 PASS（#59/#60 修复后：ready + DPH1；2026-11-10 复核 19–53 帧/10s、控制无 error，帧率随屏幕刷新内容波动）；修复前的 FAILED 记录见 §7.2。
 3. **phone_shell 审批 UI 往返**：waterfall 返回 ask 的逻辑已验；真实审批 UI 点击「允许一次/拒绝」未跑。
 4. **配置 volatile 热更新**：\`ctx.settings.mutate\` 真实写入 + 插件读到新值 + 配置行不重载，未在真实 dsh Web 会话验证（安装冒烟只验证了启动时 profile 用户层 config 生效）。
-5. **Agent token 通道**：\`agent.json\` 落盘/0600/loopback+无 Origin 判定已在真实进程验证 token 通道的"未认证 401"分支；但带 \`x-dsh-phone-token\` 的 \`POST /attach/verify\`、\`POST /agent/config\`、\`GET /status\` 未在真实设备/真实写配置场景跑通。
+5. **Agent token 通道**：\`agent.json\` 落盘/0600/loopback+无 Origin 判定已在真实进程验证 token 通道的"未认证 401"分支；\`GET /status\` 已由 2026-11-10 e2e 用 token 跑通；带 token 的 \`POST /attach/verify\`、\`POST /agent/config\` 未在真实设备/真实写配置场景跑通。
 6. **attachments 图片内容块**：\`saveImage\` 失败降级有单测；真实模型路由是否接受 image block 未验证。
-7. **\`ctx.connection.requestRejection\` 在自定义 prefix/upgrade 的真实行为**：安装冒烟验证了返回 401 的路径；401/403 的 Origin/跨站语义未在真实浏览器验证。
+7. **\`ctx.connection.requestRejection\` 在自定义 prefix/upgrade 的真实行为**：安装冒烟与 e2e 已验证同源 Cookie（GET/WS/POST \`/runtime\`）与 401 路径；401/403 的 Origin/跨站语义未在真实浏览器验证。
 8. **卸载/重载清理**：token 文件删除见 §3.4 观察项；HMR 重载后的旧 token 失效未验证。
-9. **本地平台限制**：本机无 Docker、无独立真机、无浏览器自动化；emulator + AVD + scrcpy jar 已具备（§7 实测）。
-10. **真实缺陷（本轮发现，已由 #59/#60 修复并复测）**：Host PhoneService 曾把 AdbConnection.raw 传给 stream 层导致真实设备 E_STREAM_START_FAILED；修复后重跑 §7 全链路 PASS，缺陷记录保留在 §7.1 供追溯。
+9. **本地平台限制**：本机无 Docker、无独立真机、无浏览器自动化；emulator + AVD 已具备（§7 实测）；scrcpy-server jar 按 CONTRIBUTING §4 作为临时下载产物在验收后删除，复跑前执行 \`node scripts/fetch-scrcpy-server.mjs\`。
+10. **真实缺陷（2026-10-25 发现，已由 #59/#60 修复并复测）**：Host PhoneService 曾把 AdbConnection.raw 传给 stream 层导致真实设备 E_STREAM_START_FAILED；修复后重跑 §7 全链路 PASS，缺陷记录保留在 §7.2 供追溯。
+11. **断开后极短间隔重连**：e2e 探针/正式连接间隔 <2.5s 时会命中 scrcpy-server 退出清理删 jar 的瞬态（\`E_STREAM_START_FAILED\`，设备日志 \`ClassNotFoundException\`）；harness 已加冷却 + 单次重试（§7.5），真实浏览器自动重连是否会命中未实测；产品侧兜底未做（\`src/\` 不在本 PR 范围）。
+
 
 ## 5. 人工待办（真实浏览器，禁止当成已通过）
 
@@ -156,10 +176,11 @@ stderr 仅有宿主无关警告（本机 \`all_proxy\` 是 SOCKS 的提示），
 - [ ] 软解回退发生在流中途时，等待下一个关键帧的实际时延；
 - [ ] \`phone_shell\` 审批 UI：非白名单命令弹「允许一次/拒绝」，白名单不弹；
 - [ ] 真实实例上 \`phone_screenshot\` 的 image block 被模型路由接受、截图内容正确；
-- [ ] 真实实例上 tap/swipe/key/input_text（中文 INJECT_TEXT）/app_launch/uiautomator_dump 的视觉+控件树闭环；
-- [ ] 真实 redroid / emulator / attach 三运行时启动、懒启动、booting 中间态、休眠与恢复；
-- [ ] scrcpy 实连：pushServer、首帧、控制通道、断开重连；
+- [ ] 真实实例上 tap/swipe/key/input_text（中文 INJECT_TEXT）/app_launch/uiautomator_dump 的视觉+控件树闭环（设备侧控制通道已由 #40 e2e 验证，工具级模型闭环未跑）；
+- [ ] 真实 redroid / Windows(WHPX) / macOS(HVF) 的启动与生命周期；emulator 自启/懒启动、booting 中间态（\`E_BOOTING\`）已由 #40 e2e 覆盖（§7.4），idle→paused→resume 未覆盖；
+- [x] scrcpy 实连：pushServer、首帧、控制通道、断开重连（#40 e2e 覆盖，非浏览器路径：§7.3/§7.4）；
 - [ ] 真实 dsh 会话中 \`ctx.settings.mutate\` volatile 热更新与配置行不重载。
+
 
 ## 6. 复现方式
 
@@ -169,12 +190,13 @@ npm install          # 可选：verify 会检测缺失后自动安装
 npm run verify       # 一条命令：工具/协议/安装冒烟/行数/e2e(skip)
 \`\`\`
 
-带真实 attach 设备时额外启用：
+带真实设备时额外启用（默认 DSH_PHONE_E2E_MODE=auto：5555 可达 → attach，否则 SKIP；不隐式冷启动）：
 
 \`\`\`sh
-DSH_PHONE_E2E=1 npm run verify                 # 含 verify-emulator + real-emulator e2e
-DSH_PHONE_E2E=1 node scripts/verify/verify-emulator.mjs
-DSH_PHONE_E2E_ENDPOINT=127.0.0.1:5555 npm run verify   # 独立真机 attach e2e
+DSH_PHONE_E2E=1 npm run verify                          # 含 verify-emulator + real-emulator e2e（需已运行实例）
+DSH_PHONE_E2E=1 DSH_PHONE_E2E_MODE=attach node scripts/verify/verify-emulator.mjs    # A 分支：复用已运行实例
+DSH_PHONE_E2E=1 DSH_PHONE_E2E_MODE=emulator node scripts/verify/verify-emulator.mjs  # B 分支：插件自启 owned 实例（需 5555 空闲）
+DSH_PHONE_E2E_ENDPOINT=127.0.0.1:5555 npm run verify     # 独立真机/emulator attach e2e
 \`\`\`
 
 单独运行某一项：
@@ -191,10 +213,15 @@ node --test tests/e2e/*.test.mjs
 \`\`\`sh
 test ! -e ~/.dsh/profiles/phone-verify && echo "临时 profile 已清理"
 ls /tmp | grep -c '^dsh-phone-verify-' || true   # 应为 0（隔离临时 home）
+ss -ltn | grep 5555 || echo "无 emulator 监听"    # attach 实例归用户；B 分支结束时插件已 stop
+pgrep -af 'qemu-system.*dsh-phone-avd' || echo "无 dsh-phone-avd 残留进程"
 \`\`\`
 
 
-## 7. 真实 emulator attach 链路实测（#40，2026-10-25）
+
+## 7. 真实 emulator 链路实测（#40）
+
+### 7.1 历史：A 分支 attach 首测（2026-10-25）
 
 环境：Debian 13 / Node v24.21.0 / dsh 0.2.1-rc.2；emulator-5554（sdk_gphone64_x86_64，
 Physical size: 720x1280）由**用户 live dsh web（3080）会话中的插件拉起**，本验收只复用、
@@ -202,7 +229,7 @@ Physical size: 720x1280）由**用户 live dsh web（3080）会话中的插件�
 profile（--no-open --port 0），onboarding 写 status=accepted / choice=attach +
 attach.endpoint=127.0.0.1:5555。
 
-复测：origin/main 29bc9b9（#59/#60 修复）合入后，2026-10-25 15:15 重跑，结果如下（修复前的失败记录见 §7.1）。
+复测：origin/main 29bc9b9（#59/#60 修复）合入后，2026-10-25 15:15 重跑（修复前的失败记录见 §7.2）。
 
 命令：DSH_PHONE_E2E=1 node scripts/verify/verify-emulator.mjs（约 34s；退出码 0）
 
@@ -215,10 +242,10 @@ attach.endpoint=127.0.0.1:5555。
 | stream 层直连对照 | **PASS** | startStream 704ms（含 pushServer），5s 收 51 帧（~10fps）、keyframe 1、video 408x720、deviceWidth/Height=720/1280；injectKey/touch/text 全成功 |
 | Host 释放/状态 | **PASS** | WS 关闭 + 6.5s 后 GET /status 仍 running；二次 WS 连接重建成功并收到 31 帧（viewer 已释放） |
 | 清理 | PASS | 临时 web 退出码 0、隔离 home/profile 删除；emulator 仍可达=true（未停止用户实例） |
-| emulator 自启（B 分支） | SKIP | 5554/5555 被用户 live 实例占用；按 Lead 决策不 SIGTERM 用户实例，需停用后再由人工清单覆盖 |
+| emulator 自启（B 分支） | SKIP（当时） | 5554/5555 被用户 live 实例占用；按 Lead 决策不 SIGTERM 用户实例（B 分支已于 2026-11-10 覆盖，见 §7.4） |
 | 真实浏览器渲染/WebCodecs/TinyH264 | 人工待办 | 见 §5，不冒充通过 |
 
-### 7.1 缺陷记录：host-adb-raw-double-unwrap（已修复）
+### 7.2 缺陷记录：host-adb-raw-double-unwrap（已修复）
 
 - 现象：真实设备上右侧栏 WS 视频流启动失败，E_STREAM_START_FAILED: Cannot read properties of undefined (reading sync)。
 - 定位：Host 接线把 AdbConnection.raw（已是 Tango Adb 实例）传给 stream 层
@@ -226,15 +253,113 @@ attach.endpoint=127.0.0.1:5555。
   src/stream/scrcpy.ts 期望 AdbConnection 并再次读 adb.raw -> undefined，
   AdbScrcpyClient.pushServer(undefined) 读 .sync 抛错。
 - 影响：视频流（WS）与 phone_input_text/触摸控制通道在真实设备不可用；截图/工具 shell 不受影响。
-- 处理：本 PR 不修；已记录 issue #59，由 #59/#60 修复（service.ts 传 AdbConnection 而非 .raw），合并后本脚本重跑 **全链路 PASS**（见上表），缺陷保留记录供追溯。
+- 处理：已记录 issue #59，由 #59/#60 修复（service.ts 传 AdbConnection 而非 .raw），合并后本脚本重跑 **全链路 PASS**（§7.1/§7.3），缺陷保留记录供追溯。
 
-### 7.2 复现与证据
+### 7.3 2026-11-10 复核：A 分支（attach 复用）PASS
 
-    DSH_PHONE_E2E=1 node scripts/verify/verify-emulator.mjs
-    cat /tmp/dsh-phone-e2e/report.json        # 机器可读报告（含缺陷分类/帧数/耗时）
-    ls /tmp/dsh-phone-e2e/screenshot-*.png    # 截图证据
+环境：Debian 13 / Node v24.21.0 / dsh 0.2.2-rc.1（本机当前）；AVD dsh-phone-avd（android-34
+google_apis x86_64，1080x2400 @420dpi）由**本验收手动**用 emulator CLI 启动（-no-window -no-audio
+-no-boot-anim -gpu angle_indirect -port 5554）作为「已运行实例」；插件只 attach 复用，**未启动/未停止**
+该实例；连续 2 次脚本运行 + 1 次 node --test 后端口仍可达。
 
-证据文件：/tmp/dsh-phone-e2e/report.json（本轮实测）、截图 PNG；临时 web/DSH_HOME 已清理。
+命令：DSH_PHONE_E2E=1 node scripts/verify/verify-emulator.mjs（两次约 36.7s / 35.1s；退出码 0）
+
+| 检查项 | 结果 | 实测证据（两次独立运行） |
+|---|---|---|
+| 临时 web apply + 同源鉴权 | PASS | /config：enabled=true, runtime=attach, onboarding={accepted,attach}, attach.endpoint=127.0.0.1:5555, resolved=true |
+| GET /runtime 所有权 | **PASS** | state=running, owned=false, adopted=true, endpoint.port=5555 |
+| GET /screenshot -> PNG | **PASS** | 1080x2400，2,239,924 / 2,050,628 bytes，attempts=1，1328 / 1098ms |
+| WS 握手 + hello | PASS | 带同源 Cookie 的 Upgrade 101，hello 后收 state/ready |
+| Host WS 视频流 ready/DPH1 | **PASS** | ready codec=h264, 720x1280, deviceWidth/Height=1080/2400；10s 收 28 / 31 帧（config=1, key=1, delta=26/29），DPH1 头全部合法 |
+| 控制通道 | **PASS** | key:HOME + touch down/up(360,640) + text:你好 e2e → error 帧 0 |
+| stream 层直连对照 | **PASS** | startStream 448 / 256ms（含 pushServer）；5s 收 12 帧、keyframe 1、video=328x720、deviceWidth/Height=1080/2400；injectKey/touch/text 全成功 |
+| Host 释放/状态 | **PASS** | WS 关闭 + 6.5s 后 state=running；二次 WS 连接重建成功（12 帧） |
+| 清理 | PASS | 临时 web 退出码 0、隔离 home/profile 删除；5555 仍可达=true（未停止该实例） |
+| env-gated node --test | PASS | DSH_PHONE_E2E=1 node --test tests/e2e/real-emulator.test.mjs（36.5s）；DSH_PHONE_E2E_ENDPOINT=127.0.0.1:5555 node --test tests/e2e/real-device.test.mjs（1.3s，screencap PNG） |
+| 真实浏览器渲染/审批 UI | 人工待办 | 见 §5，不冒充通过 |
+
+### 7.4 2026-11-10 首测：B 分支（插件自启 owned emulator）由 SKIP 转 PASS
+
+环境同 §7.3，但 **5555 端口空闲**（先 adb -s emulator-5554 emu kill 并等端口释放）。临时 profile
+写 runtime: emulator + onboarding.choice: emulator + emulator.avdName: dsh-phone-avd；首次
+GET /screenshot 触发懒启动（等价面板/工具首次交互），插件 spawn：
+
+    qemu-system-x86_64-headless -avd dsh-phone-avd -no-window -no-audio -no-boot-anim -gpu angle_indirect
+      -netdelay none -netspeed full -memory 2048 -cores 4 -camera-back none -camera-front none
+      -no-metrics -port 5554 -snapshot default_boot
+
+命令：DSH_PHONE_E2E=1 DSH_PHONE_E2E_MODE=emulator node scripts/verify/verify-emulator.mjs
+（三次独立运行 130.4s / 45.0s / 46.4s，退出码 0；第 1 次为「快照无效 → 冷启动」，见 §8.6）
+
+| 检查项 | 结果 | 实测证据（快照启动两次） |
+|---|---|---|
+| 模式决策 | PASS | 端口空闲 → emulator 自启；若端口已可达则明确 SKIP（不 adopt 冒充自启） |
+| 懒启动 + 首帧 | **PASS** | 首次 GET /screenshot 阻塞触发启动 → PNG；pid 321506 / 324352，AVD=dsh-phone-avd |
+| GET /screenshot -> PNG | **PASS** | 1080x2400，2,226,651 / 2,226,420 bytes，attempts=1，7927 / 9024ms（冷启动轮为 70420ms） |
+| GET /runtime 所有权 | **PASS** | state=running, running=true, owned=true, adopted=false, pid=321506/324352, endpoint.port=5555 |
+| WS 握手 + hello | PASS | 带同源 Cookie 的 Upgrade 101，hello 后收 state/ready |
+| Host WS 视频流 ready/DPH1 | **PASS** | ready codec=h264, 720x1280, deviceWidth/Height=1080/2400；10s 收 20 / 19 帧（config=1, key=1），DPH1 头合法 |
+| 控制通道 | **PASS** | key:HOME + touch down/up(360,640) + text:你好 e2e → error 帧 0 |
+| stream 层直连对照 | **PASS** | startStream 227 / 288ms；5s 收 12 帧、keyframe 1、video=328x720、deviceWidth/Height=1080/2400 |
+| Host 释放/状态 | **PASS** | WS 关闭 + 6.5s 后 state=running；二次 WS 连接重建成功（12 帧） |
+| owned stop | **PASS** | POST /runtime stop → 202；state=stopped，2.0s（冷启动轮 9.1s）；pid 已退出；5555 不可达；残留进程 0 |
+| 清理 | PASS | 临时 web 退出码 0、隔离 home/profile 删除；无 emulator 监听/进程 |
+| env-gated node --test（B） | PASS | DSH_PHONE_E2E=1 DSH_PHONE_E2E_MODE=emulator node --test tests/e2e/real-emulator.test.mjs（46.4s） |
+| 真实浏览器渲染/审批 UI | 人工待办 | 见 §5，不冒充通过 |
+
+### 7.5 观察项：断开后极短间隔重连的瞬态竞态（harness 已兜底，产品侧未改）
+
+- 现象（2026-11-10 曾稳定复现）：e2e 的「WS 探针 → 立即正式连接」在探针关闭后 <2s 重连时，
+  新连接收到 E_STREAM_START_FAILED: scrcpy server 启动失败: scrcpy server exited prematurely；
+  adb logcat 同时出现 java.lang.ClassNotFoundException: com.genymobile.scrcpy.Server。
+- 定位：scrcpy-server 3.3.x 启用 cleanup（退出时删除设备上的
+  /data/local/tmp/scrcpy-server.jar）；上一个 server 的退出清理与下一个会话的 pushServer/start
+  重叠 → 新 server 启动时 jar 已被删。设备侧会话结束后 ls /data/local/tmp 为空，印证该删除行为。
+- 处理（本 PR 仅改 harness，不改 src/）：scripts/verify/shared/real-e2e.mjs 在探针关闭后冷却
+  2.5s 再建正式连接；命中该瞬态时再冷却 2.5s 重试一次，并打印
+  [evidence] host-stream-retry。冷却后连续 A 分支 2 次 + B 分支 3 次运行均未再出现。
+- 未决：真实浏览器断流自动重连（带退避，间隔通常 >1s）是否会命中同类竞态未实测；
+  若需要产品侧兜底（push 前校验/自动重试），建议另开 issue。
+
+### 7.6 复现与证据（2026-11-10）
+
+```sh
+# 0) 准备：scrcpy-server jar（CONTRIBUTING §4：临时产物用完即删，复跑前重新下载）
+node scripts/fetch-scrcpy-server.mjs
+
+# A 分支（attach）：先手动起 headless 实例；脚本只 attach，不启动/不停止该实例
+~/Android/Sdk/emulator/emulator -avd dsh-phone-avd -no-window -no-audio -no-boot-anim \
+  -gpu angle_indirect -no-metrics -camera-back none -camera-front none -port 5554 &
+adb devices                      # 等 emulator-5554 device + sys.boot_completed=1
+DSH_PHONE_E2E=1 node scripts/verify/verify-emulator.mjs
+DSH_PHONE_E2E=1 node --test tests/e2e/real-emulator.test.mjs
+DSH_PHONE_E2E_ENDPOINT=127.0.0.1:5555 node --test tests/e2e/real-device.test.mjs
+adb -s emulator-5554 emu kill    # A 分支实例由人工启动，人工停止
+
+# B 分支（插件自启）：确认 5555 空闲；插件 owned 启动，结束时由 POST /runtime stop 停止
+DSH_PHONE_E2E=1 DSH_PHONE_E2E_MODE=emulator node scripts/verify/verify-emulator.mjs
+DSH_PHONE_E2E=1 DSH_PHONE_E2E_MODE=emulator node --test tests/e2e/real-emulator.test.mjs
+```
+
+证据文件：/tmp/dsh-phone-e2e/report.json（最近一次）、report-attach.json / report-emulator.json、
+screenshot-*.png；插件 emulator 日志 /tmp/dsh-phone-emulator-5554.log；临时 web/DSH_HOME 已清理。
+默认 DSH_PHONE_E2E_MODE=auto：端口可达 → attach，否则 SKIP（不隐式冷启动）；attach 模式要求端口
+可达，emulator 模式要求端口空闲。
+
+
+### 7.7 2026-11-10 rebase 后复核（v0.4.2 基线：origin/main 5eaa2f2，含 #72/#112/#113）
+
+#118 rebase 到 origin/main 5eaa2f2（含 #72 修复、#112 依赖升级到 DSH 0.2.2-rc.1、#113 URL/发布）后，
+在最终代码上重跑 A/B 两条真实链路，确认 #72 的 boot 等待预算 240s、断连映射、control 单飞未破坏链路：
+
+| 场景 | 命令 | 结果 | 关键数据 |
+|---|---|---|---|
+| A attach | `DSH_PHONE_E2E=1 node scripts/verify/verify-emulator.mjs` | **PASS**（36.1s） | 截图 1080x2400 / 2,043,846 bytes / 959ms；`/runtime` owned=false adopted=true；Host WS 20 帧/10s（config=1 key=1）；key+touch+中文文本 error 0；直连 push/start 230ms、12 帧/5s；关闭 6.5s 后仍 running、二次连接 12 帧；清理后 5555 仍可达 |
+| B 自启 | `DSH_PHONE_E2E=1 DSH_PHONE_E2E_MODE=emulator node scripts/verify/verify-emulator.mjs` | **PASS**（46.3s） | 插件 owned spawn（pid 349699，AVD dsh-phone-avd）；首帧截图 10.2s（快照启动，E_BOOTING 0 次）；Host WS 20 帧/10s；直连 236ms、12 帧/5s；`POST /runtime stop` 202 → stopped 2.0s、pid 退出、5555 不可达、残留进程 0 |
+
+说明：control 通道（WS key/touch/text → scrcpy control session）在 #72 的 single-flight 改造后无 error；
+boot 预算 240s（`src/phone/state.ts`）下 B 分支 10.2s 首帧、未触发超时；本机 `node --test`
+**496 例 / 490 pass / 6 skipped / 0 fail**（rebase 后含 #72 新增用例）。其余 SKIP 项与 §5 不变。
 
 
 ## 8. emulator 启动性能（issue #67）
@@ -316,7 +441,24 @@ attach.endpoint=127.0.0.1:5555。
 - 最终一轮 `medium_phone + angle_indirect` 组合的重复测量未完成（宿主同时跑用户 emulator，
   样本噪声大）；上表为 pixel_6 参数 + swiftshader_indirect 的两轮中位数，可复现。
 - Windows/macOS 的 quick-boot 与 console 保存未实测。
-- #72 的安全/生命周期项（phone_key 白名单、screenshot 掩码、booting 断连、control 单飞）拆到独立 PR。
+- #72 的安全/生命周期项（phone_key 白名单、screenshot 掩码、boot 断连映射、boot 超时取消、control 单飞）已随 #116（#72）修复并补单测；boot 等待预算 240s（`src/phone/state.ts`），2026-11-10 rebase 后 A/B 真实链路复核通过（§7.7）。
+
+### 8.6 2026-11-10 #40 复核：插件自启路径（快照启动 / 冷启动）
+
+在 §8.1 同一宿主（本次复核时负载更高，且有其它并行构建）上，用 #40 的 B 分支路径实测
+「插件 spawn → 首帧截图」（DSH_PHONE_E2E_MODE=emulator，AVD dsh-phone-avd，1080x2400）：
+
+| 场景 | 日志证据 | 进程启动→首帧截图 |
+|---|---|---|
+| 冷启动（旧快照损坏 → 删除后冷启动） | `Failed to load snapshot 'default_boot'`、`Boot completed in 19313 ms`、`Saving snapshot 'default_boot' took 9350 ms` | 70.4s（E_BOOTING 2 次，首次 31.0s） |
+| 快照启动（插件上次 stop 已存有效快照） | `Successfully loaded snapshot 'default_boot' using 4404 ms / 5189 ms` | 7.9s / 9.0s |
+| owned stop（SIGTERM；快照已有效 → 不再重存） | POST /runtime stop 202 → state=stopped | 2.0s（另一次 9.1s） |
+
+说明：1–3 轮样本、非 §8.2 的两轮中位数，仅作 #40 复核证据；rebase 后（5eaa2f2）B 分支快照启动
+复跑首帧 10.2s（§7.7）。AVD 的 default_boot 快照已由插件重新生成（ram.bin 约 2.5GB），因此后续
+启动走快照路径。
+
+
 ## 9. v0.4.0 新增验收（#83 生命周期控制 / #87 肥鱼手机定制）
 
 > 记录于 2026-10-27。单测数字来自本机 `node --test`（472 例 / 466 pass / 6 skipped / 0 fail）；
