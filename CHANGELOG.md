@@ -5,6 +5,30 @@
 
 ## [Unreleased]
 
+## [v0.4.2] - 2026-11-10
+
+第七次发布：**安全与生命周期修复（#72）** + **DSH 0.2.2-rc.1 适配（#112）** + **真实 emulator 自启验收（#40）** +
+**仓库卫生与发布资产自动化（#113）**。本次不改系统镜像/定制层。
+
+### Fixed
+
+- **runtime 安全与生命周期（#72 / PR #116）**：
+  - `phone_key` 注入防护：`AdbDevice.keyEventFor` 与 WS `key` 消息统一字符白名单
+    （只允许字母/数字/下划线，最长 64），`KEYCODE_HOME; reboot` 这类输入在拼 shell 前被拒；
+    映射名/`KEYCODE_*` 全名/数字 keycode 能力保留。
+  - 截图错误掩码：`closed`/`connect`（真断连）重试耗尽后原样上抛，HTTP `GET /screenshot` 返回
+    **502 `E_DEVICE_DISCONNECTED`**、工具层返回 `E_DEVICE_DISCONNECTED`，不再伪装成 200 `E_BOOTING`；
+    冷启动类错误（空输出/非法 base64/非 PNG）仍按 `E_DEVICE_NOT_READY`→`E_BOOTING` 处理。
+  - booting 期间断连：boot 成功后不再无条件置 `running`（改为 `stopped` + 可重试错误），
+    消除「状态 running 但无连接」的假状态。
+  - boot 超时真取消：状态机**先等待** `cancelBoot`（服务层等 `adapter.cancelStart()` 清理半启动实例落地
+    + 断开 ADB + 丢弃 handle，上限 15s）再抛错，重试不会在旧实例清理完成前再 spawn 一台；
+    lifecycle boot 预算 120s → **240s**（adapter adbd 等待 120s + connect 重试 100s + 20s 余量），
+    客户端 boot 进度上限同步 240s。
+  - control 会话 single-flight：并发 `phone_input_text`/面板触摸只创建一个 control 会话，关闭/重建按代际作废迟到结果。
+  - 单测新增：注入按键名零 shell 调用、断连 502 映射、booting 断连、超时先 cancel 后抛错、预算 240s、
+    control 单飞、WS key 白名单。
+
 ### Changed
 
 - **适配 DSH 0.2.2-rc.1**（[#112](https://github.com/thatgfsj-dsh/dsh-phone/issues/112)）：
@@ -28,6 +52,19 @@
   workflow 在 `v*` tag 推送并打包成功后**自动创建/更新 GitHub Release 并上传 `dsh-phone-<version>.tgz`**
   （`permissions: contents: write`；`workflow_dispatch` 仍只构建、不发布），Release asset 不再靠手工上传。
   注：`docs/verification.md` 的测试数字仍由 #40 的验收 PR 更新，本条只改其中的旧 URL。
+
+### Tests
+
+- **真实 emulator 自启验收（#40 / PR #118）**：`scripts/verify/verify-emulator.mjs` 支持
+  `DSH_PHONE_E2E_MODE=attach|emulator|auto`，并把验收共享工具拆为
+  `real-device-ops` / `real-host-stream` / `real-lifecycle`（原单文件将超 1000 行）。
+  **B 分支（插件 owned 自启，此前 SKIP）首次实测 PASS**：owned spawn qemu → `/runtime`
+  owned/adopted/pid 断言 → 首帧快照启动 7.9–9.0s（冷启动 70.4s）→ Host WS 19–21 帧/10s →
+  `POST /runtime stop` 202 → stopped 2.0s、pid 退出、adbd 端口关闭、残留进程 0；
+  A 分支 attach 与 scrcpy 直连复核 PASS（截图 1080x2400/2.2MB/1.1–1.3s、WS 28/31 帧/10s、中文注入 error 0）。
+  `docs/verification.md` §2/§4/§5/§7/§8.6 更新为实测数据；未覆盖项（真实浏览器/WebCodecs/TinyH264、
+  审批 UI、redroid、Windows/macOS）继续 SKIP 并写明原因。期间发现并记录「断开 <2.5s 立即重连与
+  scrcpy-server cleanup 删 jar 重叠」的瞬态竞态（harness 加 2.5s 冷却兜底，产品侧是否兜底另开 issue）。
 
 ## [v0.4.1] - 2026-10-27
 
