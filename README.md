@@ -3,13 +3,13 @@
 > 肥鱼的手机：这是大肥鱼的手机，主人不要动大肥鱼的手机喵。给 DeepSeek Harness（DSH）提供一台运行在后端、经浏览器右侧栏呈现的 Android 实例，并注册 9 个 `phone_*` 工具供 Agent 直接操作。
 
 [![DSH](https://img.shields.io/badge/DSH-0.2.2--rc.1-blue)](https://github.com/deepseek-ai/deepseek-harness)
-[![version](https://img.shields.io/badge/version-v0.4.1-blueviolet)](#版本与状态)
+[![version](https://img.shields.io/badge/version-v0.4.2-blueviolet)](#版本与状态)
 [![license: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![files ≤1000 lines](https://img.shields.io/badge/file-%E2%89%A41000%20lines-brightgreen)](CONTRIBUTING.md)
 
 ## 版本与状态
 
-**v0.4.1（已发布）**：**应用抽屉 + 面板「应用」按钮**——空白桌面从屏幕底部**上滑**即打开 4 列应用抽屉（图标/中文名/搜索/点击启动），面板底部也新增「应用」按钮一键打开（窄屏图标化）。同时保留 v0.4.0 的**生命周期控制**（启动/停止/重启、外部 `kill -9` 后 2s 内兜底、owned/adopted 所有权）与**肥鱼手机定制**（中文、空白桌面、双壁纸轮换）。发布说明见 [CHANGELOG.md](CHANGELOG.md#v041---2026-10-27)，验收状态见 [docs/verification.md](docs/verification.md)。
+**v0.4.2（已发布）**：**安全与生命周期修复**——`phone_key` 注入防护、截图真断连返回 502 `E_DEVICE_DISCONNECTED`（不再伪装「启动中」）、booting 期间断连不进入假 running、启动超时先取消/清理再抛错（预算 240s，避免孤儿 emulator）、control 会话 single-flight；同时完成 **DSH 0.2.2-rc.1 适配**（依赖/校准/文档）、**真实 emulator 自启验收**（B 分支 PASS）与**仓库卫生/Release 资产自动化**。发布说明见 [CHANGELOG.md](CHANGELOG.md#v042---2026-11-10)，验收状态见 [docs/verification.md](docs/verification.md)。
 
 - 实现与需求的差异、未验证项见 [docs/host.md](docs/host.md)、[docs/runtime.md](docs/runtime.md)、[docs/stream.md](docs/stream.md)、[docs/client.md](docs/client.md)。
 - 集成点校准（DSH 0.2.2-rc.1 本机源码证据）：[docs/calibration.md](docs/calibration.md)；架构与协议契约：[docs/architecture.md](docs/architecture.md)、[docs/protocol.md](docs/protocol.md)。
@@ -52,15 +52,15 @@
 
 ## 安装
 
-**v0.4.1 已可用。** 要求：DSH `>=0.2.1-rc.2 <0.3.0`（当前按 `0.2.2-rc.1` 校准与安装冒烟）、Node `>=20`；宿主浏览器需支持 WebCodecs（Chrome / Edge 等），不支持时自动回退 TinyH264 软解。
+**v0.4.2 已可用。** 要求：DSH `>=0.2.1-rc.2 <0.3.0`（当前按 `0.2.2-rc.1` 校准与安装冒烟）、Node `>=20`；宿主浏览器需支持 WebCodecs（Chrome / Edge 等），不支持时自动回退 TinyH264 软解。
 
 推荐安装 **GitHub Release 的预构建 tgz**（包内已有 `lib/`，**无需** `npm run build`）：
 
 ```sh
 # 1) 从 Releases 的 Assets 下载 dsh-phone-<version>.tgz（或 gh CLI）
-gh release download v0.4.1 -R thatgfsj-dsh/dsh-phone -p 'dsh-phone-*.tgz'
+gh release download v0.4.2 -R thatgfsj-dsh/dsh-phone -p 'dsh-phone-*.tgz'
 # 2) 安装到 web profile
-dsh plugin --profile web add ./dsh-phone-0.4.1.tgz
+dsh plugin --profile web add ./dsh-phone-0.4.2.tgz
 # 3) 必需：确认 bundle 真的被选中，再重启 DSH + 刷新页面（F5）
 dsh --profile web --dump-config | grep -n -A 8 'dsh-phone'
 ```
@@ -226,10 +226,10 @@ npm pack --dry-run
 - **npm 包名冲突**：npm 上的 `dsh-phone` 属于另一个项目（PonyDevAI/dsh-phone），本仓库未发布 registry；**禁止按名字安装**，必须用 Release tgz、源码目录或 git（见 [docs/install.md](docs/install.md) §1.1）。
 - **源码/git 安装可能半安装**：源码目录必须先 `npm run build`；从 `github:` 安装需要 `prepare` 且 profile 批准构建脚本，否则得到没有 `lib/` 的包；推荐 Release tgz，并按 §1.2 检查 `dsh.profile.bundles`。
 - **已有 emulator 实例不会自动复用**：启动 emulator runtime 可能再起一台同 AVD（端口顺延、资源翻倍）；有运行中的实例时优先 attach（见 [docs/install.md](docs/install.md) §1.4）。
-- **未完成的审查项**：[#72](https://github.com/thatgfsj-dsh/dsh-phone/issues/72)（phone_key 白名单/screenshot 掩码/booting 断连/control 单飞）仍在跟踪；[#73](https://github.com/thatgfsj-dsh/dsh-phone/issues/73)（viewer 心跳/引用计数代际/WS 背压/双页 4001）已随 v0.3.0 修复。
+- **安全/生命周期审查项**：[#72](https://github.com/thatgfsj-dsh/dsh-phone/issues/72)（phone_key 白名单/screenshot 掩码/booting 断连/boot 超时取消/control 单飞）已随 **v0.4.2** 修复（PR #116）；[#73](https://github.com/thatgfsj-dsh/dsh-phone/issues/73)（viewer 心跳/引用计数代际/WS 背压/双页 4001）已随 v0.3.0 修复。
 - **启动时间**：温启动 ~15s / 暂停恢复 ~19s 为本机实测；冷启动 33–95s 有客观下限（Android 14 google_apis），`aosp_atd` 未实测。
 - **一键准备**需用户点击且浏览器同源触发（Agent token 不允许自动安装软件）；下载体积/时长取决于网络与 system image。
-- **#40 部分完成**：真实 emulator attach 与 scrcpy 实连已通过（#58：Host WS 102 帧/10s、控制通道/中文输入/截图 PASS）；仍待人工/环境的项：emulator 自启（B 分支）、真实浏览器渲染/WebCodecs/TinyH264、redroid（本机无 Docker）、审批 UI 点击。详见 [docs/verification.md](docs/verification.md) §2/§7 与 §4/§5 待办。
+- **#40 部分完成**：真实 emulator attach + scrcpy 直连已通过（#58），**emulator 自启（B 分支）已于 v0.4.2 实测 PASS**（插件 owned 启动 → `POST /runtime stop` 后 2.0s stopped/端口关闭/无残留进程）；仍待人工/环境的项：真实浏览器渲染/WebCodecs/TinyH264、审批 UI 点击、工具级 `phone_*` 模型闭环、redroid（本机无 Docker）、Windows/macOS。详见 [docs/verification.md](docs/verification.md) §2/§7 与 §4/§5 待办。
 - **生命周期动作的边界**：`stop` 只由用户在浏览器触发（Agent token 仅 start/restart）；adopted 实例「停止」= 断开连接，不会关掉你的模拟器/真机；owned 实例关闭前会尽量保存快照。
 - **肥鱼定制只验证过单组合**：`android-34;google_apis;x86_64` + AVD `medium_phone`（1080x2400）；其他 API/ABI/设备档位与 Windows/macOS 宿主未验证，`provision-device.sh` 幂等但不承诺跨镜像一致。
 - **`cpuPct/memPct` 为尽力而为**：emulator/redroid/attach 各自采样（emulator `/proc`、redroid `docker stats`、attach `dumpsys`），取不到就省略字段，不阻断 status；不要当精确监控。

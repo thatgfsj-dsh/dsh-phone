@@ -5,6 +5,15 @@
 > 真实设备链路另由 env-gated 脚本 scripts/verify/verify-emulator.mjs 覆盖（DSH_PHONE_E2E=1 才跑；默认 SKIP 不碰设备）。
 > 未测项一律显式 SKIP 并写明原因，**不允许假绿**；"人工待办"不是已通过。
 >
+> **v0.4.2（2026-11-10）发布状态**：**#72 安全与生命周期修复**（`phone_key` 注入防护 / 截图真断连
+> 502 `E_DEVICE_DISCONNECTED` / booting 断连不假 running / boot 超时先 `cancelBoot` 清理再抛错且预算
+> 240s / control 会话 single-flight；PR #116）；**#112 DSH 0.2.2-rc.1 适配**（依赖升级 + 校准 + 文档；
+> PR #115）；**#113 仓库卫生**（新组织 URL / 构建期 tag 自动发布 Release asset；PR #114）；
+> **#40 真实 emulator 自启（B 分支）首次实测 PASS**（§7.7：插件 owned 启动 → `POST /runtime stop`
+> 后 2.0s stopped、pid 退出、adbd 端口关闭、无残留进程；A attach 复核 PASS）。
+> 本机 `node --test`：**496 例 / 490 pass / 6 skipped / 0 fail**，`npm run check` 通过
+> （182 文件 ≤1000，最大单文件 937 行）；未覆盖项见 §4/§5 与各节 SKIP。
+>
 > **v0.4.1（2026-10-27）发布状态**：#99 空白桌面应用抽屉（`DrawerActivity`：上滑 / 4 列网格 /
 > 搜索 / adb 固定命令）、#100 Host 动作 API（`POST /dsh-phone/api/action {action:'app-drawer'}`；
 > 409 `E_APP_DRAWER_UNAVAILABLE` / `E_LIFECYCLE_BUSY`）、#101 面板「应用」按钮（含 409 专属文案与 busy 防重复）。
