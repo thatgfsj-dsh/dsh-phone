@@ -25,11 +25,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Thatgfsj/dsh-phone.git"
+    "url": "git+https://github.com/thatgfsj-dsh/dsh-phone.git"
   },
-  "homepage": "https://github.com/Thatgfsj/dsh-phone#readme",
+  "homepage": "https://github.com/thatgfsj-dsh/dsh-phone#readme",
   "bugs": {
-    "url": "https://github.com/Thatgfsj/dsh-phone/issues"
+    "url": "https://github.com/thatgfsj-dsh/dsh-phone/issues"
   },
   "keywords": [
     "dsh",
