@@ -1,13 +1,14 @@
 # 安装、升级与卸载
 
 > 适用于 dsh-phone **v0.4.1**（以 [Releases](https://github.com/thatgfsj-dsh/dsh-phone/releases) 最新 tag 为准）。
-> DSH 版本要求：`>=0.2.1-rc.2 <0.3.0`；Node `>=20`。安装类问题先看 [troubleshooting.md](troubleshooting.md) §1/§1.1。
+> DSH 版本要求：`>=0.2.1-rc.2 <0.3.0`（当前按 `0.2.2-rc.1` 校准并做过临时 profile 安装冒烟）；Node `>=20`。
+> 安装类问题先看 [troubleshooting.md](troubleshooting.md) §1/§1.1。
 
 ## 0. 前置条件
 
 | 项 | 要求 | 检查 |
 |---|---|---|
-| DSH | `0.2.1-rc.2`（或同 minor 的 0.2.x） | `dsh --version` |
+| DSH | `0.2.2-rc.1`（同 minor 的 0.2.x；最低支持 `0.2.1-rc.2`） | `dsh --version` |
 | Node | `>=20`（本机开发用 24） | `node --version` |
 | 凭据/目录 | 可写 `$DSH_HOME`（默认 `~/.dsh`） | `echo ${DSH_HOME:-~/.dsh}` |
 | Android 运行时 | 三选一：Docker+binder / SDK Emulator / **可连的 attach 实例** | 见下表 |

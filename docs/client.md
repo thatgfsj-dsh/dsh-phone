@@ -212,7 +212,7 @@ tab body 挂载时先 `GET /dsh-phone/api/config`，由 `describePanelGate()` �
 - `pending` / `declined` / `unavailable`：渲染可读空态（`empty-state.ts`），**不建 WebSocket**、
   不黑屏。pending/declined 内嵌 `onboarding.ts` 三态卡（pending 可直接选运行时写入、declined 可
   重新启用）；Host 不可用显示错误摘要 +「重新检测」。
-- **偏差**：DSH 0.2.1-rc.2 未向第三方 client 插件暴露「打开设置页/手机分区」的公开服务
+- **偏差**：DSH 0.2.2-rc.1 未向第三方 client 插件暴露「打开设置页/手机分区」的公开服务
   （settings shell 的 open/openSection 是 ui-settings-general 内部 store，shortcuts 服务也没有
   按 id 执行命令的 API），所以「也可在 设置 → 手机 中操作」是文案指引，实际入口是内嵌卡
   （issue #45 允许的方案）；不使用 DOM hack。

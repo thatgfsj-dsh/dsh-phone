@@ -1,6 +1,7 @@
 # Host 半边设计（#4）
 
-> 状态：已实现并通过 `npm run check` / `npm run build`。契约以 [docs/architecture.md](architecture.md)
+> 状态：已实现并通过 `npm run check` / `npm run build`；集成点基线为本机 DSH **0.2.2-rc.1**
+> （逐条证据见 [docs/calibration.md](calibration.md)，随宿主升级同步复核）。契约以 [docs/architecture.md](architecture.md)
 > [docs/protocol.md](protocol.md) [docs/calibration.md](calibration.md) 为准；本文记录实现细节、
 > 与冻结契约的**有意偏差**、以及尚未验证的项。
 

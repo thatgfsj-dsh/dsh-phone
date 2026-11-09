@@ -1,7 +1,7 @@
 # 依赖基线与安装记录（#11）
 
 本文件是 dsh-phone 的**唯一依赖真源**。实现 PR 不得再改 `package.json` / `package-lock.json`；
-新增依赖先开 issue 由依赖基线负责人统一加，避免并行 PR 冲突。
+新增依赖或升级宿主共享包先开 issue（依赖基线，如 #11 / #112）由依赖基线负责人统一加，避免并行 PR 冲突。
 
 ## 0. 结论速览
 
@@ -9,12 +9,12 @@
 |---|---|
 | `npm install` 能否一次装齐全部候选依赖 | **能**（npm 11.19.0 / Node 24.21.0，见 §3） |
 | 是否需要 `--legacy-peer-deps` | **不需要**，任何情况下都不许用它掩盖冲突 |
-| `@deepseek-ai/*` 是否发布缺版本 | **不缺**：`dsh-tools@0.2.1-rc.2`、`schemastery@3.18.5`、`cordis@4.0.5` 均在 npm 上 |
+| `@deepseek-ai/*` 是否发布缺版本 | **不缺**：`dsh-tools@0.2.2-rc.1`、`schemastery@3.19.0`、`cordis@4.1.0` 均在 npm 上 |
 | 是否需要 `src/shims/*.d.ts` 类型垫片 | **不需要**（类型解析实测通过，见 §3 trial C） |
 | 宿主共享包是否误放 dependencies | **没有**，全部 `peerDependencies` + `devDependencies` |
 
 > 注意：`npm view @deepseek-ai/dsh-tools version` 的 `latest` 指向 **0.0.1-rc.1**（历史遗留 dist-tag），
-> 不代表最新版本。必须显式写 `0.2.1-rc.2` 或查 `npm view @deepseek-ai/dsh-tools versions`。
+> 不代表最新版本。必须显式写 `0.2.2-rc.1` 或查 `npm view @deepseek-ai/dsh-tools versions`。
 
 ## 1. 依赖清单
 
@@ -35,17 +35,17 @@
 
 | 包名 | 版本区间 | 归属 | 用途 | 随 bundle 安装 | License |
 |---|---|---|---|---|---|
-| `@deepseek-ai/dsh-tools` | `>=0.2.1-rc.2 <0.3.0` | peer | `defineTool` 等工具契约类型；运行时用宿主那份 | 否（宿主） | MIT |
-| `@deepseek-ai/schemastery` | `~3.18.5` | peer | `Config` schema（Cordis Config） | 否（宿主） | MIT |
-| `@deepseek-ai/cordis` | `~4.0.5` | peer | `Context` / 插件生命周期类型 | 否（宿主） | MIT |
+| `@deepseek-ai/dsh-tools` | `>=0.2.2-rc.1 <0.3.0` | peer | `defineTool` 等工具契约类型；运行时用宿主那份 | 否（宿主） | MIT |
+| `@deepseek-ai/schemastery` | `~3.19.0` | peer | `Config` schema（Cordis Config） | 否（宿主） | MIT |
+| `@deepseek-ai/cordis` | `~4.1.0` | peer | `Context` / 插件生命周期类型 | 否（宿主） | MIT |
 
 ### devDependencies（仅仓库开发/CI）
 
 | 包名 | 版本区间 | 归属 | 用途 | 随 bundle 安装 | License |
 |---|---|---|---|---|---|
-| `@deepseek-ai/dsh-tools` | `0.2.1-rc.2`（精确） | dev | typecheck / `node --test` 的模块解析 | 否 | MIT |
-| `@deepseek-ai/schemastery` | `~3.18.5` | dev | 同上 | 否 | MIT |
-| `@deepseek-ai/cordis` | `~4.0.5` | dev | 同上 | 否 | MIT |
+| `@deepseek-ai/dsh-tools` | `0.2.2-rc.1`（精确） | dev | typecheck / `node --test` 的模块解析 | 否 | MIT |
+| `@deepseek-ai/schemastery` | `~3.19.0` | dev | 同上 | 否 | MIT |
+| `@deepseek-ai/cordis` | `~4.1.0` | dev | 同上 | 否 | MIT |
 | `@types/react` | `^19.0.0` | dev | 客户端 `.tsx` 类型；React 本体由平台 `factory(require)` 提供 | 否 | MIT |
 | `@types/node` | `^24.0.0` | dev | Node API 类型（`net`/`node:test` 等） | 否 | MIT |
 | `esbuild` | `^0.25.0` | dev | Host 逐文件转译 + Client 单文件打包（`scripts/build.mjs`） | 否 | MIT |
@@ -62,12 +62,20 @@
   四个包共享协议常量（如 `ScrcpyOptionsLatest`）。升级必须五个一起升，然后重跑
   `npm install && npm run check`，不要只改一个。
 - **`@deepseek-ai/dsh-tools` devDependency 用精确版本**：它的 `peerDependencies` 全是**精确版本**
-  （`0.2.1-rc.2`），本地用 range 会让「类型签名」与「宿主实际加载的那份」漂移。
-  peer 区间保持 `>=0.2.1-rc.2 <0.3.0`，兼容性最终由 `engines.dsh` 判定
-  （`engines.dsh` 存在时 peer 区间被忽略，见 dsh-plugin-skills `plugin-package.md`「版本兼容门」）。
-- **`schemastery` / `cordis` 用 `~`**，与宿主 `@deepseek-ai/dsh@0.2.1-rc.2` 的 `dependencies` 一致
-  （`~3.18.5` / `~4.0.5`），避免出现第二份实例。
-- **升级 `@deepseek-ai/*` 必须同步改 `engines.dsh`**（当前 `>=0.2.1-rc.2 <0.3.0`）。
+  （当前 `0.2.2-rc.1`），本地用 range 会让「类型签名」与「宿主实际加载的那份」漂移。
+- **peer 区间跟随宿主收紧，`engines.dsh` 保持兼容区间**（#112 结论）：
+  - 0.2.2-rc.1 的 `dsh-app-boot` 用 `unmetRequirements` 判定兼容性：**只要插件自己声明了
+    `engines.dsh`，就只看它、完全忽略 `peerDependencies`**
+    （`$D/dsh-app-boot/lib/index.js:1097-1140`；§0.1 见 `docs/calibration.md`）。
+    所以 peer 区间不是安装门，收紧到 `cordis ~4.1.0` / `schemastery ~3.19.0` /
+    `dsh-tools >=0.2.2-rc.1 <0.3.0` 只影响开发期类型对齐与 `pnpm view` 版本信息，不会把旧宿主锁在门外。
+  - `engines.dsh` 仍是 `>=0.2.1-rc.2 <0.3.0`：这是**作者兼容区间**，覆盖 0.2.1-rc.2 起的全部 0.2.x。
+    本插件用到的 `defineTool` / `Config` / `ctx.settings` / `ctx.webServer` / slots / 右栏 tab
+    契约在两版间无破坏性变化（代码级 diff 与逐条证据见 `docs/calibration.md` §0.2）；
+    但旧宿主上的实装本轮未复测（本机宿主已升级），见 §9。
+- **`schemastery` / `cordis` 用 `~`**，与宿主 `@deepseek-ai/dsh@0.2.2-rc.1` 的 `dependencies` 一致
+  （`~3.19.0` / `~4.1.0`），避免出现第二份实例。
+- **升级 `@deepseek-ai/*` 必须同步检查 `engines.dsh` 是否仍覆盖要支持的宿主区间**（当前 `>=0.2.1-rc.2 <0.3.0`）。
 - **`tinyh264` 用 `^` 但只看 0.0.x**：它还是 0.x 预发布形态（当前 `0.0.7`），`^` 实际锁死 0.0；升级时
   必须按 §7 的三种导入路径（`es/TinyH264.js` 默认导出 = Emscripten Module 工厂、`es/TinyH264Decoder.js`
   默认导出 = 解码器类、包根 `es/index.js` 含**无扩展名**相对导入）重新核对，并重跑 client bundle 冒烟。
@@ -164,16 +172,48 @@ $ npm ls @yume-chan/scrcpy-decoder-tinyh264
 dsh-phone@0.0.0 ... └── (empty)               # 已移除
 ```
 
+### 3.3 0.2.2-rc.1 校准时的安装结果（#112，2026-11-10）
+
+环境：Node `v24.21.0`、npm `11.19.0`、pnpm `12.11.2`、本机 dsh `0.2.2-rc.1`。
+
+```
+$ npm install --no-audit --no-fund
+removed 5 packages, and changed 16 packages in 6s
+$ npm ls --depth=0
+dsh-phone@0.4.1 /home/thatgfsj/AIagent/.phone-wt/compat-022
+├── @deepseek-ai/cordis@4.1.0
+├── @deepseek-ai/dsh-tools@0.2.2-rc.1
+├── @deepseek-ai/schemastery@3.19.0
+├── @types/node@24.19.2
+├── @types/react@19.3.0
+├── @yume-chan/adb-scrcpy@2.3.2
+├── @yume-chan/adb@2.6.4
+├── @yume-chan/scrcpy@2.3.0
+├── @yume-chan/stream-extra@2.6.1
+├── esbuild@0.25.12
+├── tinyh264@0.0.7
+└── typescript@5.9.3
+$ npm ls --all | grep -Ei 'UNMET PEER|invalid|ERR!'   # 无输出
+```
+
+`dsh-tools@0.2.2-rc.1` 的 peer 集合从 20 个缩到 **7 个**
+（`cordis`、`dsh-agent`、`dsh-llm`、`dsh-scope`、`dsh-session`、`dsh-system-prompt`、`dsh-user-approval`），
+因此 `node_modules/@deepseek-ai/*` 只有 16 个、`package-lock.json` 共 60 个包条目
+（#11 时是 42 包 / 锁 68 条）。它们仍然只用于本地开发：不进 `files` 白名单、不进 tarball。
+
 ## 4. peer 冲突处理
 
 **本轮没有冲突，没有使用 `--legacy-peer-deps`，也没有启用 `src/shims` 垫片。**
 
 需要知道的行为（不是错误，是 npm 7+ 的 peer 自动安装）：
 
-- npm 会把 `@deepseek-ai/dsh-tools` 的 **20 个 `@deepseek-ai/*` peer**（`dsh-agent`、`dsh-llm`、
-  `dsh-session`、`dsh-scope`、`dsh-sandbox` …）装进本地 `node_modules` 并写进 lock
-  （lock 共 68 条）。它们**只在本地开发/类型检查时存在**：不进 `files` 白名单、不进 tarball；
+- npm 会把 `@deepseek-ai/dsh-tools` 的 **7 个 `@deepseek-ai/*` peer**（`cordis`、`dsh-agent`、`dsh-llm`、
+  `dsh-scope`、`dsh-session`、`dsh-system-prompt`、`dsh-user-approval`）装进本地 `node_modules` 并写进 lock
+  （当前 lock 共 60 条）。它们**只在本地开发/类型检查时存在**：不进 `files` 白名单、不进 tarball；
   用户 `dsh plugin add` 走 pnpm 只装 `dependencies`，devDeps 与其 peer 树不会出现。
+- profile 侧 pnpm 明确 **`autoInstallPeers: false`**（`dsh-app-boot` 生成的 `pnpm-workspace.yaml`，
+  0.2.2-rc.1 源码 `dsh-app-boot/lib/index.js:1373-1378`），所以插件的 peer 声明不会被装成第二份实例；
+  运行期 `@deepseek-ai/*` 由宿主 installation / 插件 declarer 的解析层提供（`docs/calibration.md` §0.1）。
 - 因此 `package-lock.json` 变大是预期的，review 时看 `packages[""].dependencies/peerDependencies`
   与 5 个 `@yume-chan/*` 链接即可。
 - 若将来某个 `@deepseek-ai/*` devDependency 因 peer 冲突装不上：**不许用 `--legacy-peer-deps`**。
@@ -314,7 +354,9 @@ npm pack --dry-run          # 确认 files 白名单没有 node_modules / jar
 3. 客户端软解路径（§7）的**运行期**表现未实测：已验证 bundle 可构建、无 worker/import.meta、
    WASM 以 data URI 内联；但主线程解码的 CPU/帧率、与 canvas 绘制的配合，本机无浏览器自动化环境，
    需 #6/#8 在真实页面验证。
-4. `npm pack` 产物在真实 profile 中的 pnpm 安装（依赖是否随包正确落地）由 #8 安装冒烟覆盖。
+4. `npm pack` 产物在真实 profile 中的 pnpm 安装：0.2.2-rc.1 上已由 `npm run verify` 的
+   `verify-install` 覆盖（临时 profile `dsh plugin add .` → `--dump-config` 有 `dsh-phone` 行 → 隔离 web 401/200，
+   跑完即删）；**0.2.1-rc.2 宿主上未复测**（本机已升级）。
 5. **`tinyh264`（Apache-2.0）的许可声明义务**：它会被打进 `lib/client.js` 随包分发，必须在
    README/LICENSE 附第三方许可与版权声明（h264bsd 上游为 MIT/Apache 双许可形态，具体文本以
    `node_modules/tinyh264/LICENSE` 为准），交给 #7 文档任务汇总。
