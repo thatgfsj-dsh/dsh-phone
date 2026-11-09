@@ -11,7 +11,7 @@
 | dsh | `0.2.1-rc.2`（`$D/../..` 的 package.json） |
 | 包数 | `$D` 下 305 个 `@deepseek-ai/*` 包 |
 | Node | v24（支持 `node --test` 直跑 TS） |
-| 本项目仓库 | `Thatgfsj/dsh-phone`，分支 `docs/2-calibration` |
+| 本项目仓库 | `thatgfsj-dsh/dsh-phone`，分支 `docs/2-calibration` |
 
 复核命令：
 

@@ -1,6 +1,6 @@
 # 安装、升级与卸载
 
-> 适用于 dsh-phone **v0.4.1**（以 [Releases](https://github.com/Thatgfsj/dsh-phone/releases) 最新 tag 为准）。
+> 适用于 dsh-phone **v0.4.1**（以 [Releases](https://github.com/thatgfsj-dsh/dsh-phone/releases) 最新 tag 为准）。
 > DSH 版本要求：`>=0.2.1-rc.2 <0.3.0`；Node `>=20`。安装类问题先看 [troubleshooting.md](troubleshooting.md) §1/§1.1。
 
 ## 0. 前置条件
@@ -31,11 +31,11 @@
 
 ### 1.1 下载并安装
 
-1. 打开 <https://github.com/Thatgfsj/dsh-phone/releases>，选最新 tag（如 `v0.4.1`），
+1. 打开 <https://github.com/thatgfsj-dsh/dsh-phone/releases>，选最新 tag（如 `v0.4.1`），
    在 **Assets** 下载 `dsh-phone-<version>.tgz`；或用 gh CLI：
 
    ```sh
-   gh release download v0.4.1 -R Thatgfsj/dsh-phone -p 'dsh-phone-*.tgz'
+   gh release download v0.4.1 -R thatgfsj-dsh/dsh-phone -p 'dsh-phone-*.tgz'
    tar -tzf dsh-phone-0.4.1.tgz | head -20     # 确认包内直接有 lib/、locale/、cordis.patch.yml、system/
    ```
 
@@ -47,7 +47,8 @@
 
 3. **重启 DSH**，然后**刷新浏览器页面（F5）**（区别见 §1.3）。
 
-> 若最新 Release 的 Assets 暂时没有 tgz：说明发布流水线尚未上传，可从最新一次
+> 若最新 Release 的 Assets 暂时没有 tgz：`v*` tag 推送后的构建会自动创建/更新 GitHub Release 并上传
+> `dsh-phone-<version>.tgz`（#113 起），仍缺失说明发布流水线未跑完或失败；可从最新一次
 > Actions `build` 运行的 artifact `dsh-phone`（zip 内有 tgz）下载，或按 §2 本地源码安装。
 > **不要**执行 `dsh plugin add dsh-phone`：npm registry 上的 `dsh-phone` 是另一个项目
 > （PonyDevAI/dsh-phone），本仓库未发布 npm registry。
@@ -126,7 +127,7 @@ dsh --profile web --dump-config | grep -n -A 8 'dsh-phone'
 适合改源码/调试。**从源码目录安装必须先生成 `lib/`**，否则加载失败（半安装）：
 
 ```sh
-git clone https://github.com/Thatgfsj/dsh-phone.git
+git clone https://github.com/thatgfsj-dsh/dsh-phone.git
 cd dsh-phone
 npm install
 npm run check          # 可选：tsc + 单测 + 行数检查
@@ -144,7 +145,7 @@ dsh plugin --profile web add .         # 目录安装（link，不复制文件�
 
   ```yaml
   allowBuilds:
-    "dsh-phone@https://codeload.github.com/Thatgfsj/dsh-phone/tar.gz/<commit>": true
+    "dsh-phone@https://codeload.github.com/thatgfsj-dsh/dsh-phone/tar.gz/<commit>": true
   ```
 
   （key 必须用 pnpm 报错里打印的原文，含 commit；换 tag/分支后 key 会变。）

@@ -336,7 +336,7 @@ attach.endpoint=127.0.0.1:5555。
 | 截图证据 | 首页两张 | `docs/screenshots/feiyu-home-1.webp`、`feiyu-home-2.webp`（360x800 WebP q80，29KB / 36KB） |
 
 应用方式：`system/provision-device.sh`（幂等，可重复执行）；一键准备（Provisioning）在
-`step=customize` 自动调用（[#88](https://github.com/Thatgfsj/dsh-phone/issues/88)）。
+`step=customize` 自动调用（[#88](https://github.com/thatgfsj-dsh/dsh-phone/issues/88)）。
 来源与许可（壁纸由用户提供、系统镜像不入库）见 [../system/README.md](../system/README.md)。
 
 ### 9.2 #83 生命周期控制（单测 + 手工核对）

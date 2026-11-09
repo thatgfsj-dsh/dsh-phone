@@ -58,7 +58,7 @@
 
 ```sh
 # 1) 从 Releases 的 Assets 下载 dsh-phone-<version>.tgz（或 gh CLI）
-gh release download v0.4.1 -R Thatgfsj/dsh-phone -p 'dsh-phone-*.tgz'
+gh release download v0.4.1 -R thatgfsj-dsh/dsh-phone -p 'dsh-phone-*.tgz'
 # 2) 安装到 web profile
 dsh plugin --profile web add ./dsh-phone-0.4.1.tgz
 # 3) 必需：确认 bundle 真的被选中，再重启 DSH + 刷新页面（F5）
@@ -226,7 +226,7 @@ npm pack --dry-run
 - **npm 包名冲突**：npm 上的 `dsh-phone` 属于另一个项目（PonyDevAI/dsh-phone），本仓库未发布 registry；**禁止按名字安装**，必须用 Release tgz、源码目录或 git（见 [docs/install.md](docs/install.md) §1.1）。
 - **源码/git 安装可能半安装**：源码目录必须先 `npm run build`；从 `github:` 安装需要 `prepare` 且 profile 批准构建脚本，否则得到没有 `lib/` 的包；推荐 Release tgz，并按 §1.2 检查 `dsh.profile.bundles`。
 - **已有 emulator 实例不会自动复用**：启动 emulator runtime 可能再起一台同 AVD（端口顺延、资源翻倍）；有运行中的实例时优先 attach（见 [docs/install.md](docs/install.md) §1.4）。
-- **未完成的审查项**：[#72](https://github.com/Thatgfsj/dsh-phone/issues/72)（phone_key 白名单/screenshot 掩码/booting 断连/control 单飞）仍在跟踪；[#73](https://github.com/Thatgfsj/dsh-phone/issues/73)（viewer 心跳/引用计数代际/WS 背压/双页 4001）已随 v0.3.0 修复。
+- **未完成的审查项**：[#72](https://github.com/thatgfsj-dsh/dsh-phone/issues/72)（phone_key 白名单/screenshot 掩码/booting 断连/control 单飞）仍在跟踪；[#73](https://github.com/thatgfsj-dsh/dsh-phone/issues/73)（viewer 心跳/引用计数代际/WS 背压/双页 4001）已随 v0.3.0 修复。
 - **启动时间**：温启动 ~15s / 暂停恢复 ~19s 为本机实测；冷启动 33–95s 有客观下限（Android 14 google_apis），`aosp_atd` 未实测。
 - **一键准备**需用户点击且浏览器同源触发（Agent token 不允许自动安装软件）；下载体积/时长取决于网络与 system image。
 - **#40 部分完成**：真实 emulator attach 与 scrcpy 实连已通过（#58：Host WS 102 帧/10s、控制通道/中文输入/截图 PASS）；仍待人工/环境的项：emulator 自启（B 分支）、真实浏览器渲染/WebCodecs/TinyH264、redroid（本机无 Docker）、审批 UI 点击。详见 [docs/verification.md](docs/verification.md) §2/§7 与 §4/§5 待办。
