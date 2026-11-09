@@ -1,6 +1,7 @@
 # 视频流：scrcpy + WebSocket（Host 侧零转码）
 
-> 实现见 `src/stream/**`；协议字节格式以 [docs/protocol.md](./protocol.md) §2 为准（冻结）。
+> 实现见 `src/stream/**`；集成点基线为本机 DSH **0.2.2-rc.1**（`WebUpgradeRoute` 契约见
+> [docs/calibration.md](calibration.md) §3）。协议字节格式以 [docs/protocol.md](./protocol.md) §2 为准（冻结）。
 > 本文记录数据流、scrcpy-server 版本/校验和/许可、集成契约与**未验证项**。
 
 ## 1. 数据流

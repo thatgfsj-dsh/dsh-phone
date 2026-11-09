@@ -6,7 +6,7 @@
 ## 0. 快速自检
 
 ```sh
-dsh --version                                   # 应为 0.2.1-rc.x
+dsh --version                                   # 应为 0.2.2-rc.x（最低 0.2.1-rc.2）
 node --version                                  # >=20
 dsh --profile web --dump-config | grep -n -A 8 'dsh-phone'    # 行是否存在（半安装首要判据）
 PROFILE="${DSH_HOME:-$HOME/.dsh}/profiles/web/package.json"

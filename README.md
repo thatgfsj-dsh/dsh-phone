@@ -2,7 +2,7 @@
 
 > 肥鱼的手机：这是大肥鱼的手机，主人不要动大肥鱼的手机喵。给 DeepSeek Harness（DSH）提供一台运行在后端、经浏览器右侧栏呈现的 Android 实例，并注册 9 个 `phone_*` 工具供 Agent 直接操作。
 
-[![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.2-blue)](https://github.com/deepseek-ai/deepseek-harness)
+[![DSH](https://img.shields.io/badge/DSH-0.2.2--rc.1-blue)](https://github.com/deepseek-ai/deepseek-harness)
 [![version](https://img.shields.io/badge/version-v0.4.1-blueviolet)](#版本与状态)
 [![license: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![files ≤1000 lines](https://img.shields.io/badge/file-%E2%89%A41000%20lines-brightgreen)](CONTRIBUTING.md)
@@ -12,7 +12,7 @@
 **v0.4.1（已发布）**：**应用抽屉 + 面板「应用」按钮**——空白桌面从屏幕底部**上滑**即打开 4 列应用抽屉（图标/中文名/搜索/点击启动），面板底部也新增「应用」按钮一键打开（窄屏图标化）。同时保留 v0.4.0 的**生命周期控制**（启动/停止/重启、外部 `kill -9` 后 2s 内兜底、owned/adopted 所有权）与**肥鱼手机定制**（中文、空白桌面、双壁纸轮换）。发布说明见 [CHANGELOG.md](CHANGELOG.md#v041---2026-10-27)，验收状态见 [docs/verification.md](docs/verification.md)。
 
 - 实现与需求的差异、未验证项见 [docs/host.md](docs/host.md)、[docs/runtime.md](docs/runtime.md)、[docs/stream.md](docs/stream.md)、[docs/client.md](docs/client.md)。
-- 集成点校准（DSH 0.2.1-rc.2 本机源码证据）：[docs/calibration.md](docs/calibration.md)；架构与协议契约：[docs/architecture.md](docs/architecture.md)、[docs/protocol.md](docs/protocol.md)。
+- 集成点校准（DSH 0.2.2-rc.1 本机源码证据）：[docs/calibration.md](docs/calibration.md)；架构与协议契约：[docs/architecture.md](docs/architecture.md)、[docs/protocol.md](docs/protocol.md)。
 
 ## 能力
 
@@ -52,7 +52,7 @@
 
 ## 安装
 
-**v0.4.1 已可用。** 要求：DSH `>=0.2.1-rc.2 <0.3.0`、Node `>=20`；宿主浏览器需支持 WebCodecs（Chrome / Edge 等），不支持时自动回退 TinyH264 软解。
+**v0.4.1 已可用。** 要求：DSH `>=0.2.1-rc.2 <0.3.0`（当前按 `0.2.2-rc.1` 校准与安装冒烟）、Node `>=20`；宿主浏览器需支持 WebCodecs（Chrome / Edge 等），不支持时自动回退 TinyH264 软解。
 
 推荐安装 **GitHub Release 的预构建 tgz**（包内已有 `lib/`，**无需** `npm run build`）：
 

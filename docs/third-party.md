@@ -26,9 +26,9 @@
 
 | 包 | 版本区间 | 许可 | 说明 |
 |---|---|---|---|
-| `@deepseek-ai/dsh-tools` | `>=0.2.1-rc.2 <0.3.0` | MIT | `defineTool` 等工具契约，运行时用宿主那份 |
-| `@deepseek-ai/schemastery` | `~3.18.5` | MIT | `Config` schema |
-| `@deepseek-ai/cordis` | `~4.0.5` | MIT | Context / 插件生命周期 |
+| `@deepseek-ai/dsh-tools` | `>=0.2.2-rc.1 <0.3.0` | MIT | `defineTool` 等工具契约，运行时用宿主那份 |
+| `@deepseek-ai/schemastery` | `~3.19.0` | MIT | `Config` schema |
+| `@deepseek-ai/cordis` | `~4.1.0` | MIT | Context / 插件生命周期 |
 
 React 由 DSH Web 平台通过 `factory(require)` 提供，不随本插件打包。
 

@@ -7,6 +7,18 @@
 
 ### Changed
 
+- **适配 DSH 0.2.2-rc.1**（[#112](https://github.com/thatgfsj-dsh/dsh-phone/issues/112)）：
+  - `devDependencies` / `peerDependencies` 升级到宿主实装版本：`@deepseek-ai/dsh-tools@0.2.2-rc.1`、
+    `@deepseek-ai/cordis@~4.1.0`、`@deepseek-ai/schemastery@~3.19.0`（同步 `package-lock.json`）；
+    `engines.dsh` 保留 `>=0.2.1-rc.2 <0.3.0`——该字段存在时单独决定兼容性、peer 被忽略。
+  - 以本机 0.2.2-rc.1 源码逐条重核 `docs/calibration.md`（工具注册/审批 ask/图片输出/Config 写入/
+    WebServer 路由与 WS upgrade/客户端模块加载/右栏 tab/设置页/storage），更新行号证据并标注未验证项；
+    新增 §0.1（兼容门、插件行、bundle 清单）与 §0.2（与 0.2.1-rc.2 的差异）。
+  - 更新 README 徽章与版本说明、`docs/install.md`、`docs/dependencies.md`、`docs/third-party.md`、
+    `docs/host.md`、`docs/client.md`、`docs/stream.md`、`docs/architecture.md`、`docs/troubleshooting.md`
+    中的 DSH 版本引用。
+  - 自检：`npm install` / `npm run check` / `npm run build` / `npm run verify` 全绿；临时 profile 在
+    0.2.2-rc.1 上 `dsh plugin add .` 后 `--dump-config` 有 `dsh-phone` 行，隔离 web 401/200 正常。
 - **移除 `docs/SPEC.md`**（[#110](https://github.com/thatgfsj-dsh/dsh-phone/issues/110)）：需求原文不再随公开仓库
   分发（仅在维护者本地备份）。文中「SPEC §x」引用为内部需求文档章节，不提供公开链接；README「文档」与
   `docs/architecture.md` 开头已加说明。
