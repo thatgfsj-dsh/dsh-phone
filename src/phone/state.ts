@@ -28,7 +28,10 @@ export interface LifecycleTimings {
   idleTimeoutMs: number
   /** paused → stopped 的空闲阈值，默认 30min。 */
   pausedTimeoutMs: number
-  /** booting 上限，默认 120s（覆盖 redroid 8–15s / emulator 20–40s）。 */
+  /**
+   * booting 上限，默认 240s（issue #72）：必须覆盖 adapter 自身的 adbd 等待
+   *（emulator 默认 120s）+ connect 重试预算（100s）+ 余量，否则慢冷启动会被误判超时。
+   */
   bootTimeoutMs: number
 }
 
@@ -36,7 +39,8 @@ export const DEFAULT_LIFECYCLE_TIMINGS: LifecycleTimings = {
   // issue #67：5min 太短（暂停=杀进程+快照，恢复 ~10-20s）；默认 20min
   idleTimeoutMs: 1_200_000,
   pausedTimeoutMs: 1_800_000,
-  bootTimeoutMs: 120_000,
+  // issue #72：120s < adapter adbd 等待 120s + connect 重试 100s，预算必须对齐
+  bootTimeoutMs: 240_000,
 }
 
 /** 状态机需要宿主提供的外部动作（adapter + ADB 连接由 service 层编排）。 */
@@ -49,6 +53,11 @@ export interface LifecycleHooks {
   resume(): Promise<void>
   /** → stopped：redroid stop / emulator kill / attach 断开。 */
   stop(): Promise<void>
+  /**
+   * boot 超时/失败时的清理（issue #72）：取消半启动实例并等待落地后再抛错，
+   * 避免下一次重试在旧实例清理完成前再 spawn 一台（孤儿 emulator）。
+   */
+  cancelBoot?(): Promise<void>
   onError?(error: Error, phase: LifecyclePhase): void
 }
 
@@ -70,6 +79,11 @@ function toError(value: unknown): Error {
   return value instanceof Error ? value : new Error(String(value))
 }
 
+/** 可重试错误（issue #72：booting 期间断连在 boot 成功后上报，工具/HTTP 层应提示重试）。 */
+function retryableError(message: string): Error {
+  return Object.assign(new Error(message), { retryable: true })
+}
+
 export class PhoneLifecycle {
   readonly #hooks: LifecycleHooks
   readonly #timings: LifecycleTimings
@@ -86,6 +100,8 @@ export class PhoneLifecycle {
   #disposed = false
   /** 代际（issue #83）：halt/stopNow 递增，已取消的 boot 完成后不得再置 running。 */
   #epoch = 0
+  /** issue #72：boot 期间发生断连的原因；boot 成功时必须据此回到 stopped 而不是 running。 */
+  #bootDisconnected: string | undefined
 
   constructor(
     hooks: LifecycleHooks,
@@ -181,8 +197,11 @@ export class PhoneLifecycle {
   /** ADB 断连上报：连接已不可用，状态回到 stopped，等下次 ensureRunning 重连。 */
   notifyDisconnected(reason?: string): void {
     if (this.#disposed || this.#state === 'stopped') return
+    const message = reason ?? 'ADB 连接已断开'
+    // issue #72：booting 期间断连要记下来，boot 成功路径不得无条件把状态置回 running
+    if (this.#state === 'booting') this.#bootDisconnected = message
     this.#idle.clear()
-    this.#lastError = reason ?? 'ADB 连接已断开'
+    this.#lastError = message
     this.#bootStartedAt = undefined
     this.#transition('stopped')
   }
@@ -197,6 +216,7 @@ export class PhoneLifecycle {
     this.#idle.clear()
     this.#bootStartedAt = undefined
     this.#pausing = undefined
+    this.#bootDisconnected = undefined
     this.#lastError = reason
     this.#transition('stopped')
   }
@@ -210,6 +230,7 @@ export class PhoneLifecycle {
     this.#epoch += 1
     this.#idle.clear()
     this.#bootStartedAt = undefined
+    this.#bootDisconnected = undefined
     try {
       if (this.#state !== 'stopped') await this.#hooks.stop()
     } catch (error) {
@@ -245,6 +266,7 @@ export class PhoneLifecycle {
     const previous: PhoneState = resuming ? 'paused' : 'stopped'
     const epoch = this.#epoch
     this.#lastError = undefined
+    this.#bootDisconnected = undefined
     this.#idle.clear()
     this.#bootStartedAt = this.#clock.now()
     this.#transition('booting')
@@ -255,6 +277,17 @@ export class PhoneLifecycle {
         phase,
       )
       if (epoch !== this.#epoch) return
+      // issue #72：boot 期间 ADB 已断连 → 不得进入 running（否则状态 running 但无连接）
+      if (this.#bootDisconnected !== undefined) {
+        const reason = this.#bootDisconnected
+        this.#bootDisconnected = undefined
+        this.#bootStartedAt = undefined
+        this.#lastError = reason
+        if (this.#state !== 'stopped') this.#transition('stopped')
+        const failure = retryableError(reason)
+        this.#hooks.onError?.(failure, phase)
+        throw failure
+      }
       this.#bootMs = this.#clock.now() - (this.#bootStartedAt ?? this.#clock.now())
       this.#bootStartedAt = undefined
       // issue #44：成功进入 running 后清空历史错误（只保留当前状态相关错误）
@@ -264,6 +297,14 @@ export class PhoneLifecycle {
     } catch (error) {
       if (epoch !== this.#epoch) return
       this.#bootStartedAt = undefined
+      this.#bootDisconnected = undefined
+      // issue #72：先等待外部取消落地（kill 半启动实例/断开 ADB），再抛错；
+      // 否则重试可能在旧实例清理完成前再 spawn 一台，留下孤儿 emulator。
+      try {
+        await this.#hooks.cancelBoot?.()
+      } catch {
+        // 清理失败不得掩盖原始启动错误
+      }
       const failure = toError(error)
       this.#lastError = failure.message
       this.#transition(previous)

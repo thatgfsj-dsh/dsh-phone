@@ -78,11 +78,33 @@ function requireInteger(value: number, name: string): number {
   return value
 }
 
+/** 按键名允许的字符集（issue #72）：只允许大写字母/数字/下划线，杜绝 shell 注入。 */
+const KEY_NAME_PATTERN = /^[A-Z0-9_]+$/
+/** 按键名长度上限（Android KEYCODE_* 名称远短于该值，纯防御）。 */
+const KEY_NAME_MAX_LENGTH = 64
+
 function keyEventFor(name: string): string {
   const normalized = name.trim().toUpperCase()
   if (!normalized) throw new AdbError('按键名不能为空', 'protocol')
+  // issue #72：旧实现对 `KEYCODE_` 前缀原样拼进 shell，`phone_key('KEYCODE_HOME; reboot')`
+  // 可注入任意命令。这里先做字符白名单（KEYCODE_* 的语义由设备端校验，字符集已消除注入面），
+  // 数字 keycode 与已知按键名照旧可用。
+  if (normalized.length > KEY_NAME_MAX_LENGTH || !KEY_NAME_PATTERN.test(normalized)) {
+    throw new AdbError(
+      '按键名非法（只允许字母/数字/下划线，最长 ' +
+        KEY_NAME_MAX_LENGTH +
+        ' 字符）: ' +
+        JSON.stringify(name),
+      'protocol',
+    )
+  }
   if (/^\d+$/.test(normalized)) return normalized
-  if (normalized.startsWith('KEYCODE_')) return normalized
+  if (normalized.startsWith('KEYCODE_')) {
+    if (normalized.length === 'KEYCODE_'.length) {
+      throw new AdbError('按键名不能只有 KEYCODE_ 前缀', 'protocol')
+    }
+    return normalized
+  }
   const mapped = KEY_NAMES[normalized as KeyName]
   return mapped ?? `KEYCODE_${normalized}`
 }
@@ -102,6 +124,16 @@ function isRetryableCaptureError(error: AdbError): boolean {
     error.code === 'timeout' ||
     error.code === 'closed'
   )
+}
+
+/**
+ * issue #72：真断连（`closed`/`connect`）在重试后仍失败时不得包装成
+ * `device-not-ready`，否则 HTTP 层会误回 200 `E_BOOTING`「设备启动中」。
+ * 其余可重试错误（冷启动窗口内的空输出/非法 PNG 等）仍按 booting 语义返回。
+ */
+function shouldRethrowCaptureError(error: AdbError): boolean {
+  if (!isRetryableCaptureError(error)) return true
+  return error.code === 'closed' || error.code === 'connect'
 }
 
 export interface ScreenshotOptions {
@@ -171,6 +203,10 @@ export class AdbDevice {
         // 冷启动窗口内首次失败多为设备未就绪：退避后重试
         await sleep(retryDelayMs * attempt)
       }
+    }
+    if (lastError !== undefined && shouldRethrowCaptureError(lastError)) {
+      // issue #72：真断连/非暂时性错误原样上抛，由 HTTP/工具层映射为 E_DEVICE_DISCONNECTED
+      throw lastError
     }
     throw deviceNotReady(
       '连续 ' + attempts + ' 次截图失败（' + (lastError?.message ?? '未知原因') + '），稍后重试',

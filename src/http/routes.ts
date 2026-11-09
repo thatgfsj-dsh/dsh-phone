@@ -188,12 +188,18 @@ function toApiError(error: unknown): ApiError {
   if (error instanceof RuntimeUnavailableError) {
     return new ApiError(503, 'E_RUNTIME_UNAVAILABLE', error.message, false)
   }
-  // issue #44：设备尚未就绪（冷启动窗口内截图输出异常）按可重试的 booting 中间态返回
-  if ((error as { code?: unknown } | null)?.code === 'device-not-ready') {
-    return new ApiError(200, 'E_BOOTING', '设备正在就绪（可能仍在开机），稍后重试', true)
+  const code = (error as { code?: unknown } | null)?.code
+  // issue #72：真断连（ADB 连接被关闭/连不上）不再伪装成 200 E_BOOTING「设备启动中」
+  if (code === 'closed' || code === 'connect') {
+    return new ApiError(
+      502,
+      'E_DEVICE_DISCONNECTED',
+      'ADB 连接已断开：请稍后重试 phone_status 触发重连',
+      true,
+    )
   }
   // issue #44：设备尚未就绪（冷启动窗口内截图输出异常）按可重试的 booting 中间态返回
-  if ((error as { code?: unknown } | null)?.code === 'device-not-ready') {
+  if (code === 'device-not-ready') {
     return new ApiError(200, 'E_BOOTING', '设备正在就绪（可能仍在开机），稍后重试', true)
   }
   if (error instanceof ConfigWriteError) {

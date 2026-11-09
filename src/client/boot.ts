@@ -9,8 +9,12 @@
  * status reader) so the poll lifecycle is unit-tested without a browser.
  */
 
-/** Cold-boot ceiling used for the progress bar and the "slow" wording. */
-export const BOOT_TIMEOUT_MS = 120_000
+/**
+ * Cold-boot ceiling used for the progress bar and the "slow" wording.
+ * Aligned with the Host lifecycle boot budget (issue #72: 240s =
+ * adapter adbd wait 120s + connect retry budget 100s + margin).
+ */
+export const BOOT_TIMEOUT_MS = 240_000
 /** Poll cadence while booting (architecture §7: 1s). */
 export const BOOT_POLL_INTERVAL_MS = 1_000
 

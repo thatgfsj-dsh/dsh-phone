@@ -75,6 +75,8 @@ export interface LifecycleHooksLike {
   pause(): Promise<void>
   resume(): Promise<void>
   stop(): Promise<void>
+  /** issue #72：boot 超时/失败时取消半启动实例并等待落地。 */
+  cancelBoot?(): Promise<void>
   onError?(error: Error, phase: 'start' | 'resume' | 'pause' | 'stop'): void
 }
 

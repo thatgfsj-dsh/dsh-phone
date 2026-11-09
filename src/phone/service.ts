@@ -79,9 +79,16 @@ const DEFAULT_STREAM_GRACE_MS = 5_000
 const VIEWER_HEARTBEAT_MS = 60_000
 /**
  * boot 重试预算（issue #44）：给每次 connect 自身（最长 8s）留出余量，
- * 保证“延迟累计 + 最后一次尝试”不会先撞上 lifecycle 的 120s boot 超时。
+ * 保证“延迟累计 + 最后一次尝试”不会先撞上 lifecycle 的 boot 超时。
  */
 const BOOT_RETRY_BUDGET_MS = DEFAULT_BOOT_TIMEOUT_MS - 20_000
+/**
+ * lifecycle boot 超时（issue #72）：必须覆盖 adapter 自身 adbd 等待（emulator 默认 120s）
+ * + connect 重试预算（100s）+ 20s 余量；旧的 120s 会在慢冷启动时被误判超时。
+ */
+export const BOOT_DEADLINE_MS = DEFAULT_BOOT_TIMEOUT_MS + BOOT_RETRY_BUDGET_MS + 20_000
+/** boot 失败后等待 cancelStart 清理落地的上限（issue #72）。 */
+const CANCEL_BOOT_TIMEOUT_MS = 15_000
 
 import {
   RUNTIME_PROBE_RETRY_MS,
@@ -107,6 +114,10 @@ export class PhoneService implements PhoneOperations {
   #device: DeviceOps | undefined
   #stream: StreamSession | undefined
   #control: StreamSession | undefined
+  /** issue #72：control 会话创建的 in-flight promise（并发 inputText/touch 单飞）。 */
+  #controlPromise: Promise<StreamSession> | undefined
+  /** issue #72：控制会话代际；关闭/重建时递增，使迟到的创建结果作废。 */
+  #controlGeneration = 0
   #viewers = 0
   #streamToken = 0
   #closeTimer: (() => void) | undefined
@@ -175,12 +186,14 @@ export class PhoneService implements PhoneOperations {
         resume: () => this.#resume(),
         pause: () => this.#pause(),
         stop: () => this.#stop(),
+        // issue #72：boot 超时/失败先真取消（kill 半启动实例）再抛错
+        cancelBoot: () => this.#cancelBootAfterFailure(),
         onError: (error, phase) => this.#onLifecycleError(error, phase),
       },
       {
         idleTimeoutMs: config.lifecycle.idleTimeoutMs,
         pausedTimeoutMs: config.lifecycle.pausedTimeoutMs,
-        bootTimeoutMs: DEFAULT_BOOT_TIMEOUT_MS,
+        bootTimeoutMs: BOOT_DEADLINE_MS,
       },
     )
     this.#lifecycle.onChange((status) => {
@@ -396,6 +409,7 @@ export class PhoneService implements PhoneOperations {
     }
     await this.#control?.close().catch(() => undefined)
     this.#control = undefined
+    this.#controlGeneration += 1
     const session = await this.#deps.startStream({
       // stream 层收的是 AdbConnection 本身（内部读 adb.raw）；传 Tango Adb 会 undefined（issue #59）
       adb: this.#requireConnection(),
@@ -499,14 +513,30 @@ export class PhoneService implements PhoneOperations {
     await handle?.adapter.stop().catch(() => undefined)
   }
 
-  #onLifecycleError(error: Error, phase: string): void {
+  /**
+   * issue #72：boot 超时/失败时的清理。先真取消 adapter 的半启动实例并等它落地，
+   * 再断开 ADB、丢弃 handle；这样紧接着的重试不会在旧实例清理完成前再 spawn 一台。
+   */
+  async #cancelBootAfterFailure(): Promise<void> {
+    this.#bootPhase = undefined
+    const handle = this.#handle
+    if (handle?.adapter.cancelStart) {
+      await withTimeout(
+        handle.adapter.cancelStart().catch(() => undefined),
+        CANCEL_BOOT_TIMEOUT_MS,
+        () => new RuntimeError('取消启动超时', 'stop'),
+      ).catch(() => undefined)
+    }
+    await this.#disconnectAdb().catch(() => undefined)
+    this.#dropHandle()
+    this.#emitStatus()
+  }
+
+  #onLifecycleError(_error: Error, phase: string): void {
     if (phase === 'start' || phase === 'resume') {
+      // 清理主体已在 cancelBoot 中完成（issue #72，状态机在调用 onError 前已 await 它）；
+      // 这里兜底丢弃 handle，保证不依赖 cancelBoot 的实现也能在下次调用立即重探 runtime。
       this.#bootPhase = undefined
-      // issue #67：boot 超时/失败时清理半启动实例，避免孤儿 emulator 占着 AVD/端口
-      const handle = this.#handle
-      void handle?.adapter.cancelStart?.().catch(() => undefined)
-      // 启动/唤醒失败：adapter 可能已不可用，丢弃 handle 让下一次调用重新探测；
-      // 探测本身失败的错误由 #runtime 缓存（30s 防抖），这里不再覆盖。
       this.#dropHandle()
       void this.#disconnectAdb()
     }
@@ -752,16 +782,29 @@ export class PhoneService implements PhoneOperations {
   async #controlSession(): Promise<StreamSession> {
     if (this.#stream) return this.#stream
     if (this.#control) return this.#control
-    await this.ensureRunning()
-    const config = this.#deps.config()
-    const session = await this.#deps.startStream({
-      // stream 层收的是 AdbConnection 本身（内部读 adb.raw）；传 Tango Adb 会 undefined（issue #59）
-      adb: this.#requireConnection(),
-      video: false,
-      config: config.stream,
+    // issue #72：旧实现「先查后 await」会让并发 inputText/touch 各自创建控制会话；
+    // 这里缓存创建中的 promise 做 single-flight，并把迟到结果按代际作废。
+    if (this.#controlPromise) return this.#controlPromise
+    const generation = this.#controlGeneration
+    this.#controlPromise = (async () => {
+      await this.ensureRunning()
+      const config = this.#deps.config()
+      const session = await this.#deps.startStream({
+        // stream 层收的是 AdbConnection 本身（内部读 adb.raw）；传 Tango Adb 会 undefined（issue #59）
+        adb: this.#requireConnection(),
+        video: false,
+        config: config.stream,
+      })
+      if (generation !== this.#controlGeneration) {
+        await session.close().catch(() => undefined)
+        throw new Error('控制通道已被关闭重建，请重试')
+      }
+      this.#control = session
+      return session
+    })().finally(() => {
+      this.#controlPromise = undefined
     })
-    this.#control = session
-    return session
+    return this.#controlPromise
   }
 
   async #closeSessions(): Promise<void> {
@@ -771,6 +814,7 @@ export class PhoneService implements PhoneOperations {
     const control = this.#control
     this.#stream = undefined
     this.#control = undefined
+    this.#controlGeneration += 1
     this.#viewers = 0
     this.#streamToken += 1
     if (stream) await stream.close().catch(() => undefined)
